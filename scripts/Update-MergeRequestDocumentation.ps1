@@ -91,13 +91,18 @@ function Update-MergeRequestDocumentation {
     if ($changes.Count -eq 0) { $changes.Add('- No non-merge commits were found in the selected range.') }
 
     $path = [System.IO.Path]::Combine($repositoryPath, 'mr.md')
-    $templatePath = [System.IO.Path]::Combine($repositoryPath, 'tools', 'glmeta', 'templates', 'mr.md')
+    $templateCandidates = @(
+        [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($PSScriptRoot, '..', 'templates', 'mr.md')),
+        [System.IO.Path]::Combine($repositoryPath, 'glmeta', 'templates', 'mr.md'),
+        [System.IO.Path]::Combine($repositoryPath, 'tools', 'glmeta', 'templates', 'mr.md')
+    )
+    $templatePath = $templateCandidates | Where-Object { [System.IO.File]::Exists($_) } | Select-Object -First 1
     if ([System.IO.File]::Exists($path)) {
         $content = [System.IO.File]::ReadAllText($path)
-    } elseif ([System.IO.File]::Exists($templatePath)) {
+    } elseif ($templatePath) {
         $content = [System.IO.File]::ReadAllText($templatePath)
     } else {
-        throw "Merge-request template not found: $templatePath"
+        throw "Merge-request template not found: $($templateCandidates[0])"
     }
     $lineEnding = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
     $updated = $content

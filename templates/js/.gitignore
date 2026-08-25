@@ -48,4 +48,6 @@ branding/dist
 
 # merge request templates
 mr.md
-!tools/glmeta/templates/mr.md
+
+# Repository-local glmeta checkout managed by glm.ps1
+/glmeta/

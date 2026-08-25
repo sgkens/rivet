@@ -8,6 +8,7 @@ const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));
 const packageName = pkg.name.split('/').pop();
 const packageDist = `dist/${packageName}`;
 const bundleDist = `${packageDist}/dist`;
+const globalName = packageName.replace(/(?:^|[-_])(\w)/g, (_, c) => c.toUpperCase());
 
 const banner = `/*! ${packageName} v${pkg.version} | ${pkg.homepage} | ${pkg.license} */`;
 
@@ -27,8 +28,8 @@ function stageWebUtilityAssets() {
       }
       const brandingDestination = resolve('docs/static/webutil/assets/branding');
       mkdirSync(brandingDestination, { recursive: true });
-      if (existsSync(resolve('branding/lume-logo.svg'))) {
-        cpSync(resolve('branding/lume-logo.svg'), resolve(brandingDestination, 'lume-logo.svg'));
+      if (existsSync(resolve(`branding/${packageName}-logo.svg`))) {
+        cpSync(resolve(`branding/${packageName}-logo.svg`), resolve(brandingDestination, `${packageName}-logo.svg`));
       }
       const docsData = resolve('docs/data');
       mkdirSync(docsData, { recursive: true });
@@ -46,7 +47,7 @@ export default defineConfig({
     target: 'es2015',
     lib: {
       entry: resolve(`src/${packageName}.js`),
-      name: 'Lume',
+      name: globalName,
       fileName: packageName,
     },
     minify: false,
@@ -54,7 +55,7 @@ export default defineConfig({
       output: [
         {
           format: 'umd',
-          name: 'Lume',
+          name: globalName,
           dir: bundleDist,
           entryFileNames: `${packageName}.js`,
           exports: 'named',
@@ -62,7 +63,7 @@ export default defineConfig({
         },
         {
           format: 'umd',
-          name: 'Lume',
+          name: globalName,
           dir: bundleDist,
           entryFileNames: `${packageName}.min.js`,
           exports: 'named',
@@ -70,7 +71,7 @@ export default defineConfig({
         },
         {
           format: 'umd',
-          name: 'Lume',
+          name: globalName,
           dir: bundleDist,
           entryFileNames: `${packageName}.cjs`,
           exports: 'named',
@@ -102,7 +103,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.js'],
-      exclude: ['**/node_modules/**', 'tests/**', 'src/lume-metrics.js', 'src/lume-debug.js'],
+      exclude: ['**/node_modules/**', 'tests/**'],
     },
   },
   plugins: [

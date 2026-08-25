@@ -23,11 +23,11 @@
     Deletes project labels absent from the source catalog. Disabled by default.
 
 .EXAMPLE
-    ./tools/glmeta/scripts/Sync-GitLabRepositoryMetadata.ps1 -DryRun
+    ./glmeta/scripts/Sync-GitLabRepositoryMetadata.ps1 -DryRun
 
 .EXAMPLE
     $env:GITLAB_TOKEN = 'token-from-secure-secret-store'
-    ./tools/glmeta/scripts/Sync-GitLabRepositoryMetadata.ps1
+    ./glmeta/scripts/Sync-GitLabRepositoryMetadata.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]

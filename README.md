@@ -92,7 +92,7 @@ The version calculator uses the nearest reachable Git tag, matching the canonica
 
 The command center exposes every glmeta workflow through `Show-SMenu`. Menus are organized by task rather than raw switches: Prep Release, local metadata, release documents, merge-request generation and publication, GitLab metadata, Conventional Commits, tagging and publishing, Git history, and help. Each workflow collects only its relevant options, renders the exact `run.ps1` command, and requires a final Run or Back selection. The `[MA]` tag identifies a compound workflow that runs multiple glmeta actions; the tag appears on both its main-menu category and the exact compound submenu choices.
 
-Action-specific workflows automatically skip unrelated local metadata work. Preview mode is the initial choice for release, merge-request, and GitLab operations. Remote label deletion defaults off. Escape cancels the current selection, returns to the prior screen, or exits at the main menu. The interface loads the display name from `repo_config.json`, contains no Lume-specific execution paths, and can move with the complete `glmeta` directory to another JavaScript repository.
+Action-specific workflows automatically skip unrelated local metadata work. Preview mode is the initial choice for release, merge-request, and GitLab operations. Remote label deletion defaults off. Escape cancels the current selection, returns to the prior screen, or exits at the main menu. The interface loads the display name from `repo_config.json`, contains no repository-specific hardcoded execution paths, and can move with the complete `glmeta` runner to another JavaScript repository.
 
 Release-document workflows can also write `docs/data/changelog.json` with `-UpdateChangelogJson`. Git history supplies the parsed change model, `CHANGELOG.md` remains the complete canonical human record, and the JSON projection retains only version-bumping breaking, `feat`, `fix`, and `perf` commits for documentation sites. Existing JSON release records are preserved when the current version is refreshed.
 
@@ -195,7 +195,7 @@ Show 75 non-merge commits across all refs:
 
 Pass `-Commit` to run the metadata actions and then open an interactive Conventional Commit workflow. `Show-SMenu` provides ordered type, scope, and file selection without clearing the terminal. Scope path patterns suggest the initial file selection. The review displays the exact subject, extracted release note, selected and excluded paths, diff totals, and patch before staging occurs. Confirming stages only the reviewed paths and creates one commit; declining leaves the index and working tree unchanged.
 
-Commit types, scopes, and defaults are repository configuration rather than runner code, so the `tools/glmeta` directory can be copied to another JavaScript repository and adjusted in one JSON object. Explicit parameters support scripts and dry-run validation without keyboard menus.
+Commit types, scopes, and defaults are repository configuration rather than runner code, so the `glmeta` runner and configuration can be shared across JavaScript repositories and adjusted in one JSON object. Explicit parameters support scripts and dry-run validation without keyboard menus.
 
 ### Strict reference
 
@@ -267,7 +267,7 @@ Finalize a dated release section:
 
 ### Conceptual
 
-Merge-request generation uses the existing root `mr.md` as its working template. Because root `mr.md` is intentionally ignored by Git, a missing working file is seeded from the tracked `tools/glmeta/templates/mr.md` template. The generator updates the title, source branch, target branch, change range, and the marker-bounded Summary list while preserving manually maintained Compatibility, Validation, and Review notes. It also ensures the npm and JSR package-version task is the final item in the Release checklist.
+Merge-request generation uses the existing root `mr.md` as its working template. Because root `mr.md` is intentionally ignored by Git, a missing working file is seeded from the tracked `glmeta/templates/mr.md` template. The generator updates the title, source branch, target branch, change range, and the marker-bounded Summary list while preserving manually maintained Compatibility, Validation, and Review notes. It also ensures the npm and JSR package-version task is the final item in the Release checklist.
 
 Generated Summary items include the short commit hash followed by the commit author. These use the same default-on metadata switches as changelog and release-note generation.
 
@@ -376,7 +376,7 @@ Apply remote metadata without deleting unmanaged labels:
 ## Layout
 
 ```text
-tools/glmeta/
+glmeta/
 ├── README.md
 ├── help.ps1               # Colored manual and per-parameter reference
 ├── run.ps1                # Public orchestration entry point

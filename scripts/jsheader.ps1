@@ -8,7 +8,7 @@ function Update-JSHeader {
         repo_config.json. The description comes from repo_meta.json and is also
         consumed by GitLab metadata synchronization.
     .PARAMETER RepositoryRoot
-        Repository containing README.md and tools/glmeta.
+        Repository containing README.md and repo_config.json.
     .PARAMETER ConfigPath
         Path to repo_config.json. Defaults to the repository-local file.
     .PARAMETER TemplatePath

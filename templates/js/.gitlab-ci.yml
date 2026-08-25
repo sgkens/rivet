@@ -75,7 +75,7 @@ coverage:
     - npm ci
     - npm run test:coverage
     - command -v codecov
-    - codecov --verbose upload-process --disable-search --fail-on-error -t "$CODECOV_API_KEY" -n "lume-${CI_COMMIT_SHORT_SHA}" -F unit -f coverage/lcov.info
+    - codecov --verbose upload-process --disable-search --fail-on-error -t "$CODECOV_API_KEY" -n "${CI_PROJECT_NAME}-${CI_COMMIT_SHORT_SHA}" -F unit -f coverage/lcov.info
   allow_failure: false
 
 # ------------------------------------------------------

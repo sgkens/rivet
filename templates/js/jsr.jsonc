@@ -5,16 +5,16 @@
   // PACKAGE IDENTITY
   // ---------------------------------------------------------
   // The name must be scoped with an '@' (e.g. @username/pkgname)
-  "name": "@staticcanvas/lume",
+  "name": "{{PACKAGE_NAME}}",
   // Must be a valid SemVer version (e.g. 0.1.0, 1.0.0-rc.1)
-  "version": "0.30.1",
+  "version": "0.1.0",
   // ---------------------------------------------------------
   // EXPORTS
   // ---------------------------------------------------------
   // Defines what files users can import.
-  // "." is the default import (e.g. import { Lume } from "@staticcanvas/lume")
+  // "." is the default import
   "exports": {
-    ".": "./src/lume.js",
+    ".": "./src/index.js",
   },
   // ---------------------------------------------------------
   // PUBLISHING CONTROLS

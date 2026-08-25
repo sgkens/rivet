@@ -2,7 +2,7 @@
 
 ## Title
 
-Release Lume
+Release Package
 
 ## Source branch
 

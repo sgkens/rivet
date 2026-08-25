@@ -1,28 +1,17 @@
 {
-  "name": "@staticcanvas/lume",
-  "version": "0.30.1",
-  "description": "Zero-dependency contextual tooltip engine with smart collision detection and DOM mutation awareness.",
+  "name": "{{PACKAGE_NAME}}",
+  "version": "0.1.0",
+  "description": "{{DISPLAY_NAME}} library.",
   "type": "module",
-  "main": "./dist/lume.cjs",
-  "module": "./dist/lume.mjs",
-  "browser": "./dist/lume.js",
-  "types": "./src/lume.d.ts",
+  "main": "./dist/{{PROJECT_NAME}}.cjs",
+  "module": "./dist/{{PROJECT_NAME}}.mjs",
+  "browser": "./dist/{{PROJECT_NAME}}.js",
+  "types": "./src/{{PROJECT_NAME}}.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/lume.mjs",
-      "require": "./dist/lume.cjs",
-      "default": "./dist/lume.js"
-    },
-    "./css": "./src/lume.css",
-    "./metrics": {
-      "import": "./dist/lume-metrics.mjs",
-      "require": "./dist/lume-metrics.cjs",
-      "default": "./dist/lume-metrics.js"
-    },
-    "./debug": {
-      "import": "./dist/lume-debug.mjs",
-      "require": "./dist/lume-debug.cjs",
-      "default": "./dist/lume-debug.js"
+      "import": "./dist/{{PROJECT_NAME}}.mjs",
+      "require": "./dist/{{PROJECT_NAME}}.cjs",
+      "default": "./dist/{{PROJECT_NAME}}.js"
     },
     "./package.json": "./package.json"
   },
@@ -36,46 +25,28 @@
   ],
   "scripts": {
     "dev": "vite",
-    "serve:demo": "vite --open docs/static/webutil/index.html",
     "docs:build": "npm run build && hugo --source docs",
     "docs:serve": "npm run build && hugo server --source docs --buildDrafts --disableFastRender --ignoreCache --noHTTPCache --gc",
-    "build": "vite build && npm_config_mode=metrics vite build --config vite.optional.config.js && npm_config_mode=debug vite build --config vite.optional.config.js",
+    "build": "vite build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "check:size": "node scripts/check-bundle-size.mjs",
-    "validate:release": "node scripts/validate-release.mjs",
-    "check:quality": "npm run build && npm run check:size && npm test"
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
-    "tooltip",
-    "tooltips",
-    "popover",
-    "ui-component",
-    "vanilla-js",
-    "mutation-observer",
     "staticcanvas",
     "esm"
   ],
   "author": "Garvey K. Snow",
   "license": "MIT",
-  "peerDependencies": {
-    "@staticcanvas/logcad": "^0.6.0"
-  },
-  "peerDependenciesMeta": {
-    "@staticcanvas/logcad": {
-      "optional": true
-    }
-  },
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/staticcanvas/lume.git"
+    "url": "https://gitlab.com/{{PROJECT_PATH}}.git"
   },
-  "homepage": "https://staticcanvas.gitlab.io/lume",
+  "homepage": "https://{{NAMESPACE}}.gitlab.io/{{PROJECT_NAME}}",
   "bugs": {
-    "url": "https://gitlab.com/staticcanvas/lume/-/issues"
+    "url": "https://gitlab.com/{{PROJECT_PATH}}/-/issues"
   },
   "devDependencies": {
     "@eslint/js": "^9.20.0",

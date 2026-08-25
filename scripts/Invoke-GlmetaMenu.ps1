@@ -12,7 +12,7 @@
 .PARAMETER RepositoryRoot
     Consuming repository operated on by reviewed runner commands.
 .EXAMPLE
-    Invoke-GlmetaMenu -RunnerPath ./tools/glmeta/run.ps1 -ConfigPath ./repo_config.json
+    Invoke-GlmetaMenu -RunnerPath ./glmeta/run.ps1 -ConfigPath ./repo_config.json -RepositoryRoot ./
 #>
 function Invoke-GlmetaMenu {
     [CmdletBinding()]
