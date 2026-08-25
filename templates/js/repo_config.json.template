@@ -48,7 +48,7 @@
     "scopes": [
       { "name": "core", "description": "library runtime", "paths": ["src/**", "tests/**"] },
       { "name": "docs", "description": "documentation", "paths": ["docs/**", "README*.md"] },
-      { "name": "release", "description": "release assets", "paths": ["CHANGELOG.md", "release-notes.md", "package*.json", "jsr.jsonc"] },
+      { "name": "release", "description": "release assets", "paths": ["CHANGELOG.md", "release-notes.md", "package*.json", "jsr.jsonc", "docs/data/changelog.json", "README*.md"] },
       { "name": "ci", "description": "pipeline configuration", "paths": [".gitlab-ci.yml"] },
       { "name": "none", "description": "omit the commit scope", "paths": ["**"] }
     ],
