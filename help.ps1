@@ -1,0 +1,204 @@
+<#
+.SYNOPSIS
+    Displays the glmeta terminal manual.
+.DESCRIPTION
+    Renders a colored overview for run.ps1 or detailed knowledge and examples
+    for one parameter. Parameter lookup is case-insensitive and accepts aliases.
+.PARAMETER Param
+    Runner parameter or alias to explain in detail.
+.EXAMPLE
+    ./glmeta/help.ps1
+.EXAMPLE
+    ./glmeta/help.ps1 -Param glo
+#>
+[CmdletBinding()]
+param(
+    [Alias('Parameter')]
+    [string]$Param
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$scriptsRoot = [System.IO.Path]::Combine($PSScriptRoot, 'scripts')
+. ([System.IO.Path]::Combine($scriptsRoot, 'asciitokenizer.ps1'))
+
+$asciiBanner = @'
+          /$$                           /$$
+          | $$                          | $$
+  /$$$$$$ | $$ /$$$$$$/$$$$   /$$$$$$  /$$$$$$    /$$$$$$
+ /$$__  $$| $$| $$_  $$_  $$ /$$__  $$|_  $$_/   |____  $$
+| $$  \ $$| $$| $$ \ $$ \ $$| $$$$$$$$  | $$      /$$$$$$$
+| $$  | $$| $$| $$ | $$ | $$| $$_____/  | $$ /$$ /$$__  $$
+|  $$$$$$$| $$| $$ | $$ | $$|  $$$$$$$  |  $$$$/|  $$$$$$$
+\____  $$|__/|__/ |__/ |__/ \_______/   \___/   \_______/
+      /$$ / glmeta manual
+|  $$$$$$/  Repository automation reference
+ \______/   ./help.ps1 -Param <name>
+'@
+
+function New-HelpEntry {
+    param(
+        [string]$Name, [string]$Type, [string]$Default, [string]$Summary,
+        [string]$Details, [string]$Example, [string[]]$Aliases = @(),
+        [string]$Values = 'Not restricted', [string]$Interactions = 'None.'
+    )
+    [pscustomobject]@{
+        Name = $Name; Type = $Type; Default = $Default; Summary = $Summary
+        Details = $Details; Example = $Example; Aliases = $Aliases
+        Values = $Values; Interactions = $Interactions
+    }
+}
+
+$entries = @(
+    New-HelpEntry 'Command' 'string' 'unset' 'Select a positional runner command.' 'Provides command-style routing without duplicating implementation in run.ps1.' './glm.ps1 prep-release -DryRun' -Values 'help, menu, init, bootstrap, prep-release, doctor, status, version, or readme.' -Interactions 'The help command accepts an optional second positional parameter name.'
+    New-HelpEntry 'Help' 'switch' 'false' 'Open the complete glmeta manual.' 'Dispatches directly to help.ps1 and exits before the metadata runner initializes.' './glm.ps1 -Help' -Interactions 'Combine with -Param to open one detailed parameter page.'
+    New-HelpEntry 'Menu' 'switch' 'false' 'Open the interactive glmeta command center.' 'Dispatches to the persistent Show-SMenu workflow interface. Each workflow collects relevant options, prints the exact runner command, and requires review before execution.' './glm.ps1 menu' -Interactions 'Requires an interactive terminal. Escape returns to the preceding menu or exits from the command center.'
+    New-HelpEntry 'Init' 'switch' 'false' 'Initialize repository-root glmeta configuration.' 'Infers project defaults from package.json, Git, and origin; creates only missing repo_config.json and repo_meta.json files from templates and validates an existing configuration without overwriting it.' './glm.ps1 init -DryRun' -Interactions 'Exclusive. Use DryRun to preview. Existing files are never replaced.'
+    New-HelpEntry 'Bootstrap' 'switch' 'false' 'Initialize configuration and synchronize GitLab metadata.' 'Creates or validates repository-root configuration, then applies the configured project description, topics, and labels.' './glm.ps1 bootstrap -DryRun' -Interactions 'Exclusive. DryRun previews initialization and defers remote synchronization until configuration is applied.'
+    New-HelpEntry 'PrepRelease' 'switch' 'false' 'Prepare all standard release metadata.' 'Synchronizes package.json, package-lock.json, jsr.jsonc, README metadata and TOC, finalized changelog identity, release-notes.md, and mr.md. With Commit, only changed tracked release files are selected for review.' './glm.ps1 prep-release -DryRun' -Interactions 'Implies FinalizeRelease and UpdateMergeRequest. Document and commit parameters remain available.'
+    New-HelpEntry 'Doctor' 'switch' 'false' 'Validate glmeta repository readiness.' 'Checks PowerShell, Git, configuration, required files, commit defaults, and optional GitLab credentials without changing repository state.' './glm.ps1 doctor' -Interactions 'Missing optional GitLab credentials are warnings; required failures return an error.'
+    New-HelpEntry 'Status' 'switch' 'false' 'Show repository and release state.' 'Displays branch, HEAD, upstream counts, worktree count, version baseline, calculated version, and next production and snapshot tags.' './glm.ps1 status' -Interactions 'Read-only and exclusive.'
+    New-HelpEntry 'VersionReport' 'switch' 'false' 'Explain the next version calculation.' 'Shows the stable tag baseline and classifies each subsequent commit as major, minor, patch, or no bump.' './glm.ps1 version' -Interactions 'Read-only and exclusive.'
+    New-HelpEntry 'ValidateReadme' 'switch' 'false' 'Validate required README headings.' 'Parses ATX headings outside fenced code, normalizes Markdown presentation, and prints a pass or missing result for every readme.requiredHeadings entry.' './glm.ps1 readme' -Interactions 'Read-only and exclusive when selected directly. Default metadata runs also validate unless SkipReadmeValidation is set.'
+    New-HelpEntry 'HelpParameter' 'string' 'unset' 'Select a detailed parameter manual page.' 'Passes a parameter name or alias to help.ps1. The Param alias supplies the command-style spelling.' './glm.ps1 help -Param Commit' -Aliases @('Param') -Values 'Any run.ps1 parameter name or alias.' -Interactions 'Can be used with the help command or -Help. Using -Param help opens the overview.'
+    New-HelpEntry 'SkipVersion' 'switch' 'false' 'Skip SemVer and manifest synchronization.' 'Prevents Conventional Commit scanning and leaves package.json and jsr.jsonc versions unchanged.' './glm.ps1 -SkipVersion' -Interactions 'Does not disable header or TOC generation.'
+    New-HelpEntry 'SkipReadmeMetadata' 'switch' 'false' 'Skip the generated README project header.' 'Leaves the leading centered README metadata block unchanged.' './glm.ps1 -SkipReadmeMetadata' -Interactions 'Does not disable README table-of-contents generation.'
+    New-HelpEntry 'SkipTableOfContents' 'switch' 'false' 'Skip README table-of-contents generation.' 'Leaves the marker-managed table of contents unchanged.' './glm.ps1 -SkipTableOfContents' -Interactions 'Does not disable README header generation.'
+    New-HelpEntry 'SkipReadmeValidation' 'switch' 'false' 'Skip required README heading validation.' 'Disables the configured README contract check during the default multi-action run.' './glm.ps1 -SkipReadmeValidation' -Interactions 'Does not disable header or table-of-contents generation.'
+    New-HelpEntry 'UpdateReleaseDocs' 'switch' 'false' 'Generate draft changelog and release notes.' 'Updates only glmeta marker-bounded content using commits after the selected release baseline.' './glm.ps1 -UpdateReleaseDocs -DryRun' -Interactions 'FromTag, ReleaseVersion, IncludeCommitHash, IncludeAuthor, and DryRun alter this action.'
+    New-HelpEntry 'FinalizeRelease' 'switch' 'false' 'Generate finalized, dated release documentation.' 'Implies release-document generation and writes the result beneath the finalized version heading.' './glm.ps1 -FinalizeRelease -ReleaseVersion 0.29.0' -Interactions 'ReleaseVersion can override the calculated package version.'
+    New-HelpEntry 'UpdateMergeRequest' 'switch' 'false' 'Generate the working merge-request document.' 'Seeds mr.md when missing and updates its generated identity and change-list regions while preserving manual sections.' './glm.ps1 -UpdateMergeRequest -MergeTargetBranch main' -Interactions 'FromTag, ReleaseVersion, MergeTargetBranch, IncludeCommitHash, IncludeAuthor, and DryRun alter this action.'
+    New-HelpEntry 'CreateGitLabMergeRequest' 'switch' 'false' 'Create a GitLab merge request from mr.md.' 'Reads the title, source, target, and Markdown description from mr.md and rejects a duplicate open merge request.' './glm.ps1 -UpdateMergeRequest -CreateGitLabMergeRequest -DryRun' -Interactions 'Requires the configured token. Mutually exclusive with UpdateGitLabMergeRequest.'
+    New-HelpEntry 'UpdateGitLabMergeRequest' 'switch' 'false' 'Update the matching open GitLab merge request.' 'Finds one open merge request by source and target branch, then replaces its title and description from mr.md.' './glm.ps1 -UpdateMergeRequest -UpdateGitLabMergeRequest -DryRun' -Interactions 'Requires the configured token. Mutually exclusive with CreateGitLabMergeRequest.'
+    New-HelpEntry 'ReleaseVersion' 'string' 'calculated package version' 'Override the displayed release version.' 'Supplies an explicit SemVer identity to release and merge-request document generation.' './glm.ps1 -FinalizeRelease -ReleaseVersion 0.29.0' -Values 'SemVer without a leading v, for example 0.29.0.' -Interactions 'Used only by requested release or merge-request actions.'
+    New-HelpEntry 'FromTag' 'string' 'action-specific baseline' 'Select an explicit reachable Git baseline.' 'Overrides automatic range selection. Release documents normally use the latest reachable GitLab release; merge-request generation normally uses the latest stable tag.' './glm.ps1 -UpdateReleaseDocs -FromTag v0.27.3' -Interactions 'The ref must resolve and be an ancestor of HEAD.'
+    New-HelpEntry 'MergeTargetBranch' 'string' 'main' 'Set the merge-request target branch.' 'Controls the target branch written into generated mr.md metadata.' './glm.ps1 -UpdateMergeRequest -MergeTargetBranch develop' -Interactions 'Used only with UpdateMergeRequest.'
+    New-HelpEntry 'IncludeCommitHash' 'switch' 'true' 'Include linked short hashes in generated change lists.' 'Each short hash is a Markdown link to its GitLab commit; explicitly pass :$false to omit it.' './glm.ps1 -UpdateReleaseDocs -IncludeCommitHash:$false' -Values '$true or $false.' -Interactions 'Affects release and merge-request document generation.'
+    New-HelpEntry 'IncludeAuthor' 'switch' 'true' 'Include GitLab author mentions in generated change lists.' 'A valid username is emitted as @username for GitLab auto-linking; names containing spaces remain plain text.' './glm.ps1 -UpdateReleaseDocs -IncludeAuthor:$false' -Values '$true or $false.' -Interactions 'Affects release and merge-request document generation.'
+    New-HelpEntry 'SyncGitLabMetadata' 'switch' 'false' 'Synchronize configured GitLab project metadata.' 'Applies the configured description, topics, and managed project labels using the token environment variable.' './glm.ps1 -SyncGitLabMetadata -DryRun' -Interactions 'Remote access requires GITLAB_API_KEY. DryRun suppresses writes.'
+    New-HelpEntry 'DeleteMissingLabels' 'switch' 'false' 'Delete managed GitLab labels absent from config.' 'Expands synchronization to remove remote project labels not present in the authoritative catalog.' './glm.ps1 -SyncGitLabMetadata -DeleteMissingLabels -DryRun' -Interactions 'Has effect only with SyncGitLabMetadata. Preview with DryRun first.'
+    New-HelpEntry 'Commit' 'switch' 'false' 'Open the reviewed Conventional Commit workflow.' 'Selects type, exact scope, and files; previews the subject, extracted release note, totals, and patch before staging only reviewed paths.' './glm.ps1 -Commit' -Interactions 'CommitType, CommitScope, CommitDescription, CommitFiles, and CommitAll control selection. DryRun never stages or commits.'
+    New-HelpEntry 'CommitType' 'string' 'interactive configured default' 'Supply the Conventional Commit type.' 'Bypasses the type menu and validates the value against commit.types in repo_config.json.' './glm.ps1 -Commit -CommitType feat' -Values 'Configured values such as feat, fix, docs, refactor, perf, test, build, ci, chore, or revert.' -Interactions 'Requires Commit to execute the workflow.'
+    New-HelpEntry 'CommitScope' 'string' 'interactive configured default' 'Supply an exact Conventional Commit scope.' 'Suggests changed files using configured path patterns. The same value filters -glo, release documents, and merge-request changes by exact parsed scope.' './glm.ps1 -glo -CommitScope core' -Values 'A configured scope or none.' -Interactions 'With Commit, none omits parentheses from the subject.'
+    New-HelpEntry 'CommitDescription' 'string' 'interactive configured default' 'Supply the commit subject description.' 'Bypasses the description prompt. The final Conventional Commit subject is limited to 100 characters and trailing periods are removed.' "./glm.ps1 -Commit -CommitDescription 'add repository manual'" -Values 'One non-empty line.' -Interactions 'Requires Commit to execute the workflow.'
+    New-HelpEntry 'CommitFiles' 'string array' 'interactive selection' 'Stage only explicitly selected changed paths.' 'The review shows their diff and leaves every unselected change untouched.' "./glm.ps1 -Commit -CommitFiles 'src/core.js','tests/core.test.js'" -Values 'Changed repository-relative paths.' -Interactions 'Requires Commit and cannot be combined with CommitAll.'
+    New-HelpEntry 'CommitAll' 'switch' 'false' 'Select every changed path for the commit.' 'Bypasses file selection but still previews the complete selection and requires confirmation.' './glm.ps1 -Commit -CommitAll -DryRun' -Interactions 'Requires Commit and cannot be combined with CommitFiles.'
+    New-HelpEntry 'Tag' 'switch' 'false' 'Review, create, and push a release tag.' 'Runs as an exclusive action. It calculates the version, rejects a behind or diverged branch, pushes locally ahead commits first, then creates and pushes one annotated tag.' './glm.ps1 -Tag -DryRun' -Interactions 'Production tags trigger CI publishing and release jobs. DryRun performs no branch, tag, or remote writes.'
+    New-HelpEntry 'Snapshot' 'switch' 'false' 'Create a plain SemVer snapshot tag.' 'Creates a tag such as v0.28.0. CI runs validation but omits package publishing and production release jobs; production tags append the configured -release suffix.' './glm.ps1 -Tag -Snapshot -DryRun' -Interactions 'Requires Tag. Without Snapshot, Tag creates a production tag such as v0.28.0-release.'
+    New-HelpEntry 'TagForce' 'switch' 'false' 'Allow non-interactive tag publication.' 'Bypasses only the final keyboard confirmation; all worktree, upstream, manifest, duplicate-tag, and remote checks remain enforced.' './glm.ps1 -Tag -Snapshot -TagForce' -Interactions 'Requires Tag. Intended for reviewed CI or scripted automation.'
+    New-HelpEntry 'TagVersion' 'string' 'calculated next version' 'Override the version used for a tag.' 'Accepts a stable MAJOR.MINOR.PATCH value with an optional leading v. Prefix and production release suffix formatting remain configuration-driven.' './glm.ps1 -Tag -TagVersion 0.29.0 -DryRun' -Values 'MAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH.' -Interactions 'Requires Tag. Manifest versions must match before an applied tag can be created.'
+    New-HelpEntry 'GitLog' 'switch' 'false' 'Open the exclusive detailed Git history view.' 'Prints repository state, enriched one-line commits, aggregate history details, and changed paths, then exits without running metadata actions.' './glm.ps1 -glo' -Aliases @('glo') -Interactions 'GitLogCount, GitLogAll, and GitLogNoMerges alter this view.'
+    New-HelpEntry 'GitLogCount' 'integer' '25' 'Set the maximum displayed commit count.' 'Limits the number of commits parsed, rendered, and included in aggregate history totals.' './glm.ps1 -glo -GitLogCount 75' -Values '1 through 500.' -Interactions 'Used only by GitLog/glo.'
+    New-HelpEntry 'GitLogAll' 'switch' 'false' 'Read history from every Git ref.' 'Adds git log --all so commits reachable from all local and remote refs can be displayed.' './glm.ps1 -glo -GitLogAll' -Interactions 'Used only by GitLog/glo.'
+    New-HelpEntry 'GitLogNoMerges' 'switch' 'false' 'Omit merge commits from history.' 'Adds git log --no-merges before parsing the detailed history.' './glm.ps1 -glo -GitLogNoMerges' -Interactions 'Used only by GitLog/glo.'
+    New-HelpEntry 'RepositoryRoot' 'string' 'current directory' 'Select the consuming repository root.' 'Separates repository operations from the standalone glmeta checkout. glm.ps1 supplies this value automatically.' './glmeta/run.ps1 -RepositoryRoot $PWD status' -Values 'A path inside a Git working tree.' -Interactions 'Normally omitted when invoking glm.ps1.'
+    New-HelpEntry 'ConfigPath' 'string' 'repository-root repo_config.json' 'Override repository configuration discovery.' 'Supplies an explicit configuration path while the consuming repository root continues to be resolved through Git.' './glm.ps1 doctor -ConfigPath ./config/repo_config.json' -Values 'An existing JSON configuration path.' -Interactions 'Initialization always creates the conventional repository-root filenames.'
+    New-HelpEntry 'DryRun' 'switch' 'false' 'Preview supported actions without applying writes.' 'Passes preview mode into manifest, README, documentation, GitLab, and commit actions. Git history mode is always read-only.' './glm.ps1 -DryRun' -Interactions 'Use with destructive or remote options before applying changes.'
+)
+
+function Get-HelpGroup {
+    param([Parameter(Mandatory)][string]$Name)
+    switch -Regex ($Name) {
+        '^(Command|Help|Menu|Init|Bootstrap|HelpParameter|Doctor|Status|VersionReport|ValidateReadme|RepositoryRoot|ConfigPath|DryRun)$' { return 'HELP AND EXECUTION' }
+        '^(SkipVersion|SkipReadmeMetadata|SkipTableOfContents|SkipReadmeValidation)$' { return 'LOCAL METADATA' }
+        '^(PrepRelease|UpdateReleaseDocs|FinalizeRelease|UpdateMergeRequest|CreateGitLabMergeRequest|UpdateGitLabMergeRequest|ReleaseVersion|FromTag|MergeTargetBranch|IncludeCommitHash|IncludeAuthor)$' { return 'RELEASE AND MERGE REQUEST' }
+        '^(SyncGitLabMetadata|DeleteMissingLabels)$' { return 'GITLAB METADATA' }
+        '^(Commit|CommitType|CommitScope|CommitDescription|CommitFiles|CommitAll)$' { return 'CONVENTIONAL COMMIT' }
+        '^(Tag|Snapshot|TagForce|TagVersion)$' { return 'TAGGING AND PUBLISHING' }
+        '^(GitLog|GitLogCount|GitLogAll|GitLogNoMerges)$' { return 'GIT HISTORY' }
+        default { return 'OTHER' }
+    }
+}
+
+$bannerTokens = ConvertTo-AsciiTokens -Lines ($asciiBanner -split '\r?\n') -Connectivity 8
+foreach ($line in @(ConvertTo-GradientAsciiLines -TokenObject $bannerTokens -Mode Horizontal -StartColor @(0, 180, 255) -EndColor @(255, 60, 180))) { [Console]::WriteLine($line) }
+[Console]::WriteLine('')
+
+function Write-ManualField([string]$Label, [string]$Value) {
+    [Console]::WriteLine("$(Format-AnsiText -Text $Label.PadRight(14) -Color @(145, 155, 175))$Value")
+}
+
+if (-not [string]::IsNullOrWhiteSpace($Param)) {
+    $lookup = $Param.TrimStart('-')
+    $entry = $entries | Where-Object { $_.Name -ieq $lookup -or $_.Aliases -icontains $lookup } | Select-Object -First 1
+    if ($null -eq $entry) {
+        $names = ($entries.Name | Sort-Object) -join ', '
+        throw "Unknown run.ps1 parameter '$Param'. Available parameters: $names"
+    }
+    [Console]::WriteLine((Format-AnsiText -Text "-$($entry.Name)" -Color @(0, 200, 255) -Bold))
+    [Console]::WriteLine((Format-AnsiText -Text $entry.Summary -Color @(220, 225, 235) -Bold))
+    [Console]::WriteLine('')
+    Write-ManualField 'GROUP' (Get-HelpGroup -Name $entry.Name)
+    Write-ManualField 'TYPE' $entry.Type
+    Write-ManualField 'DEFAULT' $entry.Default
+    Write-ManualField 'ALIASES' $(if ($entry.Aliases.Count) { ($entry.Aliases -join ', ') } else { 'none' })
+    Write-ManualField 'VALUES' $entry.Values
+    [Console]::WriteLine('')
+    [Console]::WriteLine((Format-AnsiText -Text 'DETAIL' -Color @(210, 120, 255) -Bold))
+    [Console]::WriteLine($entry.Details)
+    [Console]::WriteLine('')
+    [Console]::WriteLine((Format-AnsiText -Text 'INTERACTIONS' -Color @(210, 120, 255) -Bold))
+    [Console]::WriteLine($entry.Interactions)
+    [Console]::WriteLine('')
+    [Console]::WriteLine((Format-AnsiText -Text 'EXAMPLE' -Color @(80, 220, 150) -Bold))
+    [Console]::WriteLine("  $($entry.Example)")
+    return
+}
+
+[Console]::WriteLine((Format-AnsiText -Text 'GLMETA MANUAL' -Color @(0, 200, 255) -Bold))
+[Console]::WriteLine('Repository-local JavaScript metadata, release, GitLab, commit, and history automation.')
+[Console]::WriteLine('')
+Write-ManualField 'RUN' './glm.ps1 [parameters]'
+Write-ManualField 'HELP' './glm.ps1 help [parameter]'
+Write-ManualField 'MENU' './glm.ps1 menu'
+Write-ManualField 'PARAM HELP' './glmeta/help.ps1 -Param <name>'
+Write-ManualField 'HISTORY' './glm.ps1 -glo'
+Write-ManualField 'COMMIT' './glm.ps1 -Commit'
+[Console]::WriteLine('')
+[Console]::WriteLine((Format-AnsiText -Text 'PARAMETER GROUPS' -Color @(210, 120, 255) -Bold))
+$groupOrder = @('HELP AND EXECUTION', 'LOCAL METADATA', 'RELEASE AND MERGE REQUEST', 'GITLAB METADATA', 'CONVENTIONAL COMMIT', 'TAGGING AND PUBLISHING', 'GIT HISTORY', 'OTHER')
+foreach ($group in $groupOrder) {
+    $groupEntries = @($entries | Where-Object { (Get-HelpGroup -Name $_.Name) -eq $group })
+    if ($groupEntries.Count -eq 0) { continue }
+    [Console]::WriteLine('')
+    [Console]::WriteLine((Format-AnsiText -Text "  $group" -Color @(0, 200, 255) -Bold))
+    foreach ($entry in $groupEntries) {
+        $aliasText = if ($entry.Aliases.Count) { " / -$($entry.Aliases -join ', -')" } else { '' }
+        $name = "-$($entry.Name)$aliasText"
+        [Console]::WriteLine("    $(Format-AnsiText -Text $name.PadRight(30) -Color @(255, 195, 75))$($entry.Summary)")
+    }
+}
+[Console]::WriteLine('')
+[Console]::WriteLine((Format-AnsiText -Text 'EXAMPLES' -Color @(210, 120, 255) -Bold))
+$examples = @(
+    [pscustomobject]@{ Title = 'Preview repository configuration initialization'; Command = './glm.ps1 init -DryRun' }
+    [pscustomobject]@{ Title = 'Preview repository and GitLab bootstrap'; Command = './glm.ps1 bootstrap -DryRun' }
+    [pscustomobject]@{ Title = 'Preview complete release preparation'; Command = './glm.ps1 prep-release -DryRun' }
+    [pscustomobject]@{ Title = 'Validate required README sections'; Command = './glm.ps1 readme' }
+    [pscustomobject]@{ Title = 'Open the interactive glmeta command center'; Command = './glm.ps1 menu' }
+    [pscustomobject]@{ Title = 'Validate local glmeta readiness'; Command = './glm.ps1 doctor' }
+    [pscustomobject]@{ Title = 'Show repository and release state'; Command = './glm.ps1 status' }
+    [pscustomobject]@{ Title = 'Explain the calculated version'; Command = './glm.ps1 version' }
+    [pscustomobject]@{ Title = 'Preview all default local metadata actions'; Command = './glm.ps1 -DryRun' }
+    [pscustomobject]@{ Title = 'Apply the default local metadata actions'; Command = './glm.ps1' }
+    [pscustomobject]@{ Title = 'Generate draft release documents from an explicit tag'; Command = './glm.ps1 -UpdateReleaseDocs -FromTag v0.27.3' }
+    [pscustomobject]@{ Title = 'Finalize release documentation with an explicit version'; Command = './glm.ps1 -FinalizeRelease -ReleaseVersion 0.29.0' }
+    [pscustomobject]@{ Title = 'Generate the merge-request working document'; Command = './glm.ps1 -UpdateMergeRequest -MergeTargetBranch main' }
+    [pscustomobject]@{ Title = 'Preview creating a GitLab merge request from mr.md'; Command = './glm.ps1 -UpdateMergeRequest -CreateGitLabMergeRequest -DryRun' }
+    [pscustomobject]@{ Title = 'Preview updating the matching GitLab merge request'; Command = './glm.ps1 -UpdateMergeRequest -UpdateGitLabMergeRequest -DryRun' }
+    [pscustomobject]@{ Title = 'Preview GitLab metadata synchronization and label deletion'; Command = './glm.ps1 -SyncGitLabMetadata -DeleteMissingLabels -DryRun' }
+    [pscustomobject]@{ Title = 'Open the interactive Conventional Commit workflow'; Command = './glm.ps1 -Commit' }
+    [pscustomobject]@{ Title = 'Preview a commit with non-interactive values'; Command = "./glm.ps1 -Commit -CommitType feat -CommitScope glmeta -CommitDescription 'add repository automation' -DryRun" }
+    [pscustomobject]@{ Title = 'Preview a snapshot checkpoint tag ignored by CI'; Command = './glm.ps1 -Tag -Snapshot -DryRun' }
+    [pscustomobject]@{ Title = 'Preview a production publishing tag'; Command = './glm.ps1 -Tag -TagVersion 0.29.0 -DryRun' }
+    [pscustomobject]@{ Title = 'Show 50 detailed commits across all refs'; Command = './glm.ps1 -glo -GitLogCount 50 -GitLogAll' }
+    [pscustomobject]@{ Title = 'Open detailed help for one parameter or alias'; Command = './glm.ps1 help glo' }
+)
+foreach ($example in $examples) {
+    [Console]::WriteLine('')
+    [Console]::WriteLine("  $(Format-AnsiText -Text $example.Title -Color @(220, 225, 235) -Bold)")
+    [Console]::WriteLine("    $(Format-AnsiText -Text $example.Command -Color @(80, 220, 150))")
+}
+[Console]::WriteLine('')
+[Console]::WriteLine((Format-AnsiText -Text "Use -Param for full behavior, constraints, interactions, and an example." -Color @(145, 155, 175)))

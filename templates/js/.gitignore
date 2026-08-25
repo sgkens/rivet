@@ -1,0 +1,51 @@
+/node_modules
+/dist
+.npmrc
+public/
+docs/data/package.json
+docs/data/releases.json
+
+# Build locks & cache
+.hugo_build.lock
+.cache/
+coverage/
+*.tmp
+
+# Ignore environment variable files
+*.env
+.dev.vars*
+build.env
+
+# Ignore log files
+*.log
+
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE/editor specific files
+.vscode/
+.idea/
+
+# ignore automator-devops
+automation-devops
+
+# Local task-list backup
+pending-tasks copy.md
+
+# Local devt task tracker state
+devtracker-source.md
+devtracker-pending.md
+devtracker-archive.md
+tools/devt/
+
+# context source
+context-source/
+
+# branding output
+branding/dist
+
+
+# merge request templates
+mr.md
+!tools/glmeta/templates/mr.md

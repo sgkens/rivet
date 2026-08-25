@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "provider": "gitlab",
+  "scope": "project",
+  "project": {
+    "description": "{{DISPLAY_NAME}} is a JavaScript library.",
+    "topics": ["javascript", "library", "npm", "jsr", "documentation", "testing", "ci"]
+  },
+  "labels": [
+    { "name": "core", "description": "Library runtime and public API.", "color": "#1f77b4", "textColor": "#FFFFFF" },
+    { "name": "docs", "description": "README, guides, and API documentation.", "color": "#0d6efd", "textColor": "#FFFFFF" },
+    { "name": "release", "description": "Versioning, packaging, and publication.", "color": "#6f42c1", "textColor": "#FFFFFF" },
+    { "name": "ci", "description": "Continuous integration and deployment.", "color": "#6610f2", "textColor": "#FFFFFF" }
+  ]
+}

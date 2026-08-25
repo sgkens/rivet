@@ -1,0 +1,24 @@
+<div align="{{ALIGNMENT}}">
+
+![{{DISPLAY_NAME}} Banner]({{BANNER_URL}})
+
+[![license](https://img.shields.io/gitlab/license/{{PROJECT_PATH}}?{{BADGE_QUERY}})]({{GITLAB_BASE_URI}}/{{PROJECT_PATH}})
+[![gitlab-pipeline](https://img.shields.io/gitlab/pipeline-status/{{PROJECT_PATH}}?{{BADGE_QUERY}})]({{GITLAB_BASE_URI}}/{{PROJECT_PATH}}/-/pipelines)
+[![codecov](https://codecov.io/gl/{{PROJECT_PATH}}/branch/{{LATEST_TAG}}/graph/badge.svg?token={{CODECOV_TOKEN}})](https://codecov.io/gl/{{PROJECT_PATH}})
+[![documentation](https://img.shields.io/badge/docs-online-{{BADGE_COLOR}}?style={{BADGE_STYLE}}&logo=gitbook&logoColor={{LOGO_COLOR}})]({{DOCUMENTATION_URL}})
+[![gitlab-issues](https://img.shields.io/gitlab/issues/open/{{PROJECT_PATH}}?{{BADGE_QUERY}})]({{GITLAB_BASE_URI}}/{{PROJECT_PATH}}/-/work_items?sort=created_date&state=opened&first_page_size=20)
+
+[![gitlab-release](https://img.shields.io/gitlab/v/release/{{PROJECT_PATH}}?{{BADGE_QUERY}})]({{GITLAB_BASE_URI}}/{{PROJECT_PATH}}/-/releases/permalink/latest)
+[![gitlab-tag](https://img.shields.io/gitlab/v/tag/{{PROJECT_PATH}}?sort=semver&{{BADGE_QUERY}})]({{GITLAB_BASE_URI}}/{{PROJECT_PATH}}/-/tags)
+
+[![npm-version](https://img.shields.io/npm/v/{{NPM_PACKAGE}}?{{PACKAGE_BADGE_QUERY}})](https://www.npmjs.com/package/{{NPM_PACKAGE}})
+[![npm-downloads](https://img.shields.io/npm/dw/{{NPM_PACKAGE}}?{{PACKAGE_BADGE_QUERY}})](https://www.npmjs.com/package/{{NPM_PACKAGE}})
+
+[![jsr-version](https://img.shields.io/jsr/v/{{ENCODED_JSR_PACKAGE}}?{{JSR_BADGE_QUERY}})](https://jsr.io/{{ENCODED_JSR_PACKAGE}})
+[![jsdelivr-hitsperweek](https://img.shields.io/jsdelivr/npm/hw/{{NPM_PACKAGE}}?{{JSDELIVR_BADGE_QUERY}})](https://cdn.jsdelivr.net/package/npm/{{NPM_PACKAGE}})
+
+[![runtime-badge]({{GITLAB_BASE_URI}}/api/v4/projects/{{ENCODED_ARTIFACT_PATH}}/jobs/artifacts/{{LATEST_TAG}}/raw/runtime-badge-flat.svg?job=generate-runtime-badge)]({{GITLAB_BASE_URI}}/api/v4/projects/{{ENCODED_ARTIFACT_PATH}}/jobs/artifacts/{{DEFAULT_BRANCH}}/raw/runtime-badge-flat.svg?job=generate-runtime-badge)
+
+> **{{DISPLAY_NAME}}**{{DESCRIPTION_SUFFIX}}
+
+</div>
