@@ -28,6 +28,7 @@ param(
     [switch]$SkipReadmeValidation,
     [switch]$UpdateReleaseDocs,
     [switch]$FinalizeRelease,
+    [switch]$UpdateChangelogJson,
     [switch]$UpdateMergeRequest,
     [switch]$CreateGitLabMergeRequest,
     [switch]$UpdateGitLabMergeRequest,
@@ -187,6 +188,7 @@ if ($Snapshot -and -not $Tag) { throw '-Snapshot requires -Tag.' }
 if ($TagForce -and -not $Tag) { throw '-TagForce requires -Tag.' }
 if (-not [string]::IsNullOrWhiteSpace($TagVersion) -and -not $Tag) { throw '-TagVersion requires -Tag.' }
 if ($CreateGitLabMergeRequest -and $UpdateGitLabMergeRequest) { throw '-CreateGitLabMergeRequest and -UpdateGitLabMergeRequest are mutually exclusive.' }
+if ($UpdateChangelogJson -and -not ($UpdateReleaseDocs -or $FinalizeRelease -or $PrepRelease -or $Command -eq 'prep-release')) { throw '-UpdateChangelogJson requires -UpdateReleaseDocs, -FinalizeRelease, or prep-release.' }
 if ($Tag) {
     $tagParameters = @{
         RepositoryRoot = $repositoryRoot
@@ -295,6 +297,7 @@ if (-not ($UpdateReleaseDocs -or $FinalizeRelease)) {
             Finalize       = $FinalizeRelease
             IncludeCommitHash = $IncludeCommitHash
             IncludeAuthor  = $IncludeAuthor
+            WriteChangelogJson = $UpdateChangelogJson
             DryRun         = $DryRun
         }
         if (-not [string]::IsNullOrWhiteSpace($FromTag)) { $releaseParameters.FromTag = $FromTag }
@@ -396,7 +399,7 @@ if (-not $Commit) {
         if (-not [string]::IsNullOrWhiteSpace($CommitScope)) { $commitParameters.Scope = $CommitScope }
         if (-not [string]::IsNullOrWhiteSpace($CommitDescription)) { $commitParameters.Description = $CommitDescription }
         if ($prepReleaseDefaultCommitSelection) {
-            $releaseFileSet = [System.Collections.Generic.HashSet[string]]::new(@('package.json', 'package-lock.json', 'jsr.jsonc', 'CHANGELOG.md', 'release-notes.md', 'README.md', 'README-npm.md'), [System.StringComparer]::Ordinal)
+            $releaseFileSet = [System.Collections.Generic.HashSet[string]]::new(@('package.json', 'package-lock.json', 'jsr.jsonc', 'CHANGELOG.md', 'release-notes.md', 'docs/data/changelog.json', 'README.md', 'README-npm.md'), [System.StringComparer]::Ordinal)
             $changedReleaseFiles = @(& git -C $repositoryRoot status --porcelain=v1 --untracked-files=all) | ForEach-Object {
                 if ($_.Length -gt 3) { $_.Substring(3).Trim('"') }
             } | Where-Object { $releaseFileSet.Contains($_) }

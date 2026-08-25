@@ -149,6 +149,14 @@ function Invoke-GlmetaMenu {
         return $true
     }
 
+    function Add-ChangelogJsonOption([System.Collections.IDictionary]$Parameters) {
+        $docsDataPath = [System.IO.Path]::Combine($repositoryRoot, 'docs', 'data')
+        $generateJson = Select-YesNo -Title 'GENERATE CURATED DOCS CHANGELOG JSON?' -Default ([System.IO.Directory]::Exists($docsDataPath))
+        if ($null -eq $generateJson) { return $false }
+        if ($generateJson) { $Parameters.UpdateChangelogJson = $true }
+        return $true
+    }
+
     $menuAsciiHeader = @'
  ⢀⡀ ⡇ ⣀⣀  ⢀⡀ ⣰⡀ ⢀⣀   ⠄ ⣀⡀ ⣰⡀ ⢀⡀ ⡀⣀ ⢀⣀ ⢀⣀ ⣰⡀ ⠄ ⡀⢀ ⢀⡀   ⡷⢾ ⢀⡀ ⣀⡀ ⡀⢀
  ⣑⡺ ⠣ ⠇⠇⠇ ⠣⠭ ⠘⠤ ⠣⠼   ⠇ ⠇⠸ ⠘⠤ ⠣⠭ ⠏  ⠣⠼ ⠣⠤ ⠘⠤ ⠇ ⠱⠃ ⠣⠭   ⠇⠸ ⠣⠭ ⠇⠸ ⠣⠼
@@ -208,6 +216,7 @@ function Invoke-GlmetaMenu {
                 if ($null -eq $kind) { continue }
                 $p = [ordered]@{ PrepRelease = $true }
                 if (-not (Add-DocumentOptions $p)) { continue }
+                if (-not (Add-ChangelogJsonOption $p)) { continue }
                 if ($kind -eq 'preview') { $p.DryRun = $true }
                 if ($kind -eq 'commit') { $p.Commit = $true; $p.CommitType = 'chore'; $p.CommitScope = 'release'; $p.CommitDescription = 'prepare release metadata' }
                 Invoke-ReviewedWorkflow -Title 'Prepare release' -Parameters $p
@@ -242,6 +251,7 @@ function Invoke-GlmetaMenu {
                 Add-IsolatedActionDefaults $p
                 if ($kind -eq 'finalize') { $p.FinalizeRelease = $true } else { $p.UpdateReleaseDocs = $true }
                 if (-not (Add-DocumentOptions $p)) { continue }
+                if (-not (Add-ChangelogJsonOption $p)) { continue }
                 if (-not (Select-PreviewMode $p)) { continue }
                 Invoke-ReviewedWorkflow -Title 'Release documentation' -Parameters $p
             }

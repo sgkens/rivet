@@ -196,10 +196,23 @@ Describe 'Update-ReleaseDocumentation' {
         [System.IO.File]::AppendAllText((Join-Path $repo 'README.md'), "`nfeature")
         Invoke-TestGit $repo add --all | Out-Null
         Invoke-TestGit $repo commit -m 'feat(core): add fixture feature' | Out-Null
-        Update-ReleaseDocumentation -RepositoryRoot $repo -ConfigPath $config -FromTag v1.0.0 -Version 1.1.0 -Confirm:$false | Out-Null
+        [System.IO.File]::AppendAllText((Join-Path $repo 'README.md'), "`ndocs")
+        Invoke-TestGit $repo add --all | Out-Null
+        Invoke-TestGit $repo commit -m 'docs(core): document fixture feature' | Out-Null
+        Update-ReleaseDocumentation -RepositoryRoot $repo -ConfigPath $config -FromTag v1.0.0 -Version 1.1.0 -WriteChangelogJson -Confirm:$false | Out-Null
         $content = [System.IO.File]::ReadAllText((Join-Path $repo 'CHANGELOG.md'))
         $content | Should -Match '\[.{7}\]\(https://gitlab\.example/group/fixture/-/commit/[0-9a-f]{40}\)'
         $content | Should -Match '@fixture-user'
+        $content | Should -Match 'Document fixture feature\.'
+
+        $json = [System.IO.File]::ReadAllText((Join-Path $repo 'docs/data/changelog.json')) | ConvertFrom-Json
+        $json.source.history | Should -Be 'git'
+        $json.source.canonical_record | Should -Be 'CHANGELOG.md'
+        $json.versions[0].version | Should -Be 'unreleased'
+        $json.versions[0].included | Should -Be 1
+        $json.versions[0].excluded_non_version_bump | Should -Be 1
+        $json.versions[0].entries[0].type | Should -Be 'feat'
+        $json.versions[0].entries[0].commit.url | Should -Match '/-/commit/[0-9a-f]{40}$'
     }
 }
 

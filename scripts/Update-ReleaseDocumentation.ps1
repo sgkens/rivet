@@ -22,6 +22,11 @@ function Update-ReleaseDocumentation {
         Appends the short commit hash to each generated change. Enabled by default.
     .PARAMETER IncludeAuthor
         Appends the commit author after the commit hash. Enabled by default.
+    .PARAMETER WriteChangelogJson
+        Writes a curated, structured changelog projection for documentation.
+        Only breaking, feat, fix, and perf commits are included.
+    .PARAMETER ChangelogJsonPath
+        Repository-relative or absolute path for the JSON projection.
     .EXAMPLE
         Update-ReleaseDocumentation -RepositoryRoot $PWD -DryRun
     .EXAMPLE
@@ -38,6 +43,8 @@ function Update-ReleaseDocumentation {
         [switch]$Finalize,
         [switch]$IncludeCommitHash = $true,
         [switch]$IncludeAuthor = $true,
+        [switch]$WriteChangelogJson,
+        [string]$ChangelogJsonPath = 'docs/data/changelog.json',
         [switch]$DryRun
     )
 
@@ -101,6 +108,8 @@ function Update-ReleaseDocumentation {
     foreach ($category in $categoryOrder) {
         $entries[$category] = [System.Collections.Generic.List[string]]::new()
     }
+    $jsonEntries = [System.Collections.Generic.List[object]]::new()
+    $commitsIncludedInMarkdown = 0
 
     foreach ($record in ($rawLog -split [char]0x1e)) {
         if ([string]::IsNullOrWhiteSpace($record)) { continue }
@@ -113,18 +122,40 @@ function Update-ReleaseDocumentation {
         $body = if ($fields.Count -gt 4) { $fields[4] } else { '' }
         $parsed = ConvertFrom-ConventionalCommit -Subject $subject -Body $body
         if (-not [string]::IsNullOrWhiteSpace($Scope) -and $parsed.Scope -ine $Scope) { continue }
+        $commitsIncludedInMarkdown++
         $category = $parsed.Category
         $text = $parsed.ReleaseNote
+        $shortHash = $commitHash.Substring(0, [Math]::Min(7, $commitHash.Length))
+        $authorReference = Resolve-GitLabAuthorReference -Config $config -Name $author -Email $authorEmail
         $metadata = [System.Collections.Generic.List[string]]::new(2)
         if ($IncludeCommitHash) {
-            $shortHash = $commitHash.Substring(0, [Math]::Min(7, $commitHash.Length))
             $metadata.Add("[$shortHash]($baseUri/$projectPath/-/commit/$commitHash)")
         }
         if ($IncludeAuthor) {
-            $metadata.Add((Resolve-GitLabAuthorReference -Config $config -Name $author -Email $authorEmail))
+            $metadata.Add($authorReference)
         }
         if ($metadata.Count -gt 0) { $text += " ($($metadata -join ' — '))" }
         if (-not $entries[$category].Contains($text)) { [void]$entries[$category].Add($text) }
+
+        $isVersionBump = $parsed.Breaking -or ($parsed.IsConventional -and $parsed.Type -in @('feat', 'fix', 'perf'))
+        if ($isVersionBump) {
+            $jsonEntries.Add([ordered]@{
+                category = $category
+                type = $parsed.Type
+                scope = $parsed.Scope
+                breaking = [bool]$parsed.Breaking
+                text = $parsed.ReleaseNote
+                commit = [ordered]@{
+                    short = $shortHash
+                    hash = $commitHash
+                    url = "$baseUri/$projectPath/-/commit/$commitHash"
+                }
+                author = [ordered]@{
+                    name = $author
+                    reference = $authorReference
+                }
+            })
+        }
     }
 
     $sections = [System.Collections.Generic.List[string]]::new()
@@ -201,9 +232,56 @@ $notesEnd
         $releaseNotes.TrimEnd() + $lineEnding + $lineEnding + $notesBlock + $lineEnding
     }
 
+    $updatedChangelogJson = $null
+    $changelogJsonAbsolutePath = $null
+    if ($WriteChangelogJson) {
+        $changelogJsonAbsolutePath = if ([System.IO.Path]::IsPathRooted($ChangelogJsonPath)) {
+            [System.IO.Path]::GetFullPath($ChangelogJsonPath)
+        } else {
+            [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($repositoryPath, $ChangelogJsonPath))
+        }
+        $existingVersions = [System.Collections.Generic.List[object]]::new()
+        if ([System.IO.File]::Exists($changelogJsonAbsolutePath)) {
+            $existingDocument = [System.IO.File]::ReadAllText($changelogJsonAbsolutePath) | ConvertFrom-Json
+            foreach ($existingVersion in @($existingDocument.versions)) {
+                $existingIdentity = [string]$existingVersion.version
+                if ($existingIdentity -ine 'unreleased' -and $existingIdentity -ine $Version) { $existingVersions.Add($existingVersion) }
+            }
+        }
+        $versionIdentity = if ($Finalize) { $Version } else { 'unreleased' }
+        $releaseDate = if ($Finalize) { [DateTime]::Today.ToString('yyyy-MM-dd') } else { $null }
+        $currentVersion = [ordered]@{
+            version = $versionIdentity
+            date = $releaseDate
+            from = $FromTag
+            to = 'HEAD'
+            entries = @($jsonEntries)
+            included = $jsonEntries.Count
+            excluded_non_version_bump = $commitsIncludedInMarkdown - $jsonEntries.Count
+        }
+        $versions = [System.Collections.Generic.List[object]]::new()
+        $versions.Add($currentVersion)
+        foreach ($existingVersion in $existingVersions) { $versions.Add($existingVersion) }
+        $jsonDocument = [ordered]@{
+            schema_version = 1
+            source = [ordered]@{
+                history = 'git'
+                canonical_record = 'CHANGELOG.md'
+            }
+            projection = 'Version-bumping Conventional Commits: breaking, feat, fix, and perf.'
+            project = $projectPath
+            versions = @($versions)
+        }
+        $updatedChangelogJson = ($jsonDocument | ConvertTo-Json -Depth 12) + "`n"
+    }
+
     $changedFiles = [System.Collections.Generic.List[string]]::new()
     if ($updatedChangelog -ne $changelog) { $changedFiles.Add('CHANGELOG.md') }
     if ($updatedReleaseNotes -ne $releaseNotes) { $changedFiles.Add('release-notes.md') }
+    if ($WriteChangelogJson) {
+        $existingChangelogJson = if ([System.IO.File]::Exists($changelogJsonAbsolutePath)) { [System.IO.File]::ReadAllText($changelogJsonAbsolutePath) } else { '' }
+        if ($updatedChangelogJson -ne $existingChangelogJson) { $changedFiles.Add($ChangelogJsonPath) }
+    }
     if ($changedFiles.Count -eq 0) {
         Write-Output "Release documentation is current for $FromTag..HEAD."
         return
@@ -215,6 +293,11 @@ $notesEnd
     if ($PSCmdlet.ShouldProcess(($changedFiles -join ', '), "Generate release documentation from $FromTag..HEAD")) {
         if ($updatedChangelog -ne $changelog) { [System.IO.File]::WriteAllText($changelogPath, $updatedChangelog, [System.Text.UTF8Encoding]::new($false)) }
         if ($updatedReleaseNotes -ne $releaseNotes) { [System.IO.File]::WriteAllText($releaseNotesPath, $updatedReleaseNotes, [System.Text.UTF8Encoding]::new($false)) }
+        if ($WriteChangelogJson) {
+            $jsonDirectory = [System.IO.Path]::GetDirectoryName($changelogJsonAbsolutePath)
+            if (-not [System.IO.Directory]::Exists($jsonDirectory)) { [System.IO.Directory]::CreateDirectory($jsonDirectory) | Out-Null }
+            [System.IO.File]::WriteAllText($changelogJsonAbsolutePath, $updatedChangelogJson, [System.Text.UTF8Encoding]::new($false))
+        }
         Write-Output "Updated $($changedFiles -join ' and ') from $FromTag for $Version."
     }
 }

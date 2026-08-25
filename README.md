@@ -94,6 +94,8 @@ The command center exposes every glmeta workflow through `Show-SMenu`. Menus are
 
 Action-specific workflows automatically skip unrelated local metadata work. Preview mode is the initial choice for release, merge-request, and GitLab operations. Remote label deletion defaults off. Escape cancels the current selection, returns to the prior screen, or exits at the main menu. The interface loads the display name from `repo_config.json`, contains no Lume-specific execution paths, and can move with the complete `glmeta` directory to another JavaScript repository.
 
+Release-document workflows can also write `docs/data/changelog.json` with `-UpdateChangelogJson`. Git history supplies the parsed change model, `CHANGELOG.md` remains the complete canonical human record, and the JSON projection retains only version-bumping breaking, `feat`, `fix`, and `perf` commits for documentation sites. Existing JSON release records are preserved when the current version is refreshed.
+
 `Show-SMenu` redraws by moving upward exactly the number of rows owned by the menu instead of relying on a terminal-global saved cursor. This prevents blocking and duplicated rows in PTYs, containers, SSH sessions, and nested prompts. Selected labels use a bold italic truecolor gradient and one additional left-padding column; descriptions use a separate subdued palette. Rows are measured before ANSI encoding, reserve the final terminal column, and truncate descriptions when required.
 
 The command-center identity line assigns separate semantic colors to the project name, package name, and package version. Version-report bump inputs and repository status values use the same palette for major, minor, patch, clean, warning, and failure states.
