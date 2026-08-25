@@ -498,9 +498,12 @@ release:gitlab:
       EOF
       )
 
+      if [ -n "$GITLAB_API_KEY" ]; then
+        export GITLAB_TOKEN="$GITLAB_API_KEY"
+      fi
+
       glab release create "$CI_COMMIT_TAG" \
         --name "Release ${PROJECT_NAME} ${PROJECT_VERSION}" \
-        --ref "$CI_COMMIT_SHA" \
         --notes "$DESCRIPTION" \
         --assets-links "$ASSET_LINKS"
 
