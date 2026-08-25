@@ -288,3 +288,27 @@ Fixture changes.
         }
     }
 }
+
+Describe 'glmeta command-center multi-action labels' {
+    It 'marks every compound workflow with the reusable MA attribute' {
+        $menuSource = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot '../scripts/Invoke-GlmetaMenu.ps1'))
+        $menuSource | Should -Match '\$displayLabel = if \(\$MultiAction\) \{ "\[MA\] \$Label" \}'
+
+        @(
+            'Initialize repository'
+            'Prep Release'
+            'Configuration and GitLab'
+            'Preview release preparation'
+            'Apply release preparation'
+            'Apply and commit'
+            'Preview all'
+            'Apply all'
+            'Generate and create on GitLab'
+            'Generate and update on GitLab'
+            'Metadata and commit'
+        ) | ForEach-Object {
+            $escapedLabel = [regex]::Escape($_)
+            $menuSource | Should -Match "New-MenuItem '$escapedLabel'[^\r\n]+-MultiAction"
+        }
+    }
+}

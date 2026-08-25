@@ -46,8 +46,14 @@ function Invoke-GlmetaMenu {
         } finally { $packageDocument.Dispose() }
     }
 
-    function New-MenuItem([string]$Label, [object]$Value, [string]$Description = '') {
-        [pscustomobject]@{ Label = $Label; Value = $Value; Description = $Description }
+    function New-MenuItem([string]$Label, [object]$Value, [string]$Description = '', [switch]$MultiAction) {
+        $displayLabel = if ($MultiAction) { "[MA] $Label" } else { $Label }
+        [pscustomobject]@{
+            Label = $displayLabel
+            Value = $Value
+            Description = $Description
+            MultiAction = [bool]$MultiAction
+        }
     }
 
     function Select-MenuValue {
@@ -149,13 +155,13 @@ function Invoke-GlmetaMenu {
 '@
     $menuHeaderTokens = ConvertTo-AsciiTokens -Lines ($menuAsciiHeader -split '\r?\n') -Connectivity 8
     $mainItems = @(
-        (New-MenuItem 'Initialize repository' 'init' 'create or validate root configuration')
-        (New-MenuItem 'Prep Release' 'prep_release' 'manifests, release docs, READMEs, and mr.md')
-        (New-MenuItem 'Local metadata' 'local' 'version, README header, and TOC')
+        (New-MenuItem 'Initialize repository' 'init' 'create or validate root configuration' -MultiAction)
+        (New-MenuItem 'Prep Release' 'prep_release' 'manifests, release docs, READMEs, and mr.md' -MultiAction)
+        (New-MenuItem 'Local metadata' 'local' 'version, README header, and TOC' -MultiAction)
         (New-MenuItem 'Release documents' 'release' 'draft or finalize changelog and notes')
-        (New-MenuItem 'Merge request' 'merge_request' 'generate the managed mr.md document')
+        (New-MenuItem 'Merge request' 'merge_request' 'generate the managed mr.md document' -MultiAction)
         (New-MenuItem 'GitLab metadata' 'gitlab' 'description, topics, and labels')
-        (New-MenuItem 'Conventional Commit' 'commit' 'review and submit repository changes')
+        (New-MenuItem 'Conventional Commit' 'commit' 'review and submit repository changes' -MultiAction)
         (New-MenuItem 'Tag and publish' 'tag' 'snapshot checkpoint or production release')
         (New-MenuItem 'Git history' 'history' 'detailed enriched one-line log')
         (New-MenuItem 'Repository status' 'status' 'version, upstream, worktree, and next tags')
@@ -176,6 +182,8 @@ function Invoke-GlmetaMenu {
         [Console]::Write((Format-AnsiText -Text $packageName -Color @(0, 200, 255)))
         [Console]::WriteLine((Format-AnsiText -Text " v$packageVersion" -Color @(255, 195, 75) -Bold))
         [Console]::WriteLine((Format-AnsiText -Text 'Every workflow is reviewed before execution.' -Color @(145, 155, 175)))
+        [Console]::Write((Format-AnsiText -Text '[MA]' -Color @(190, 100, 255) -Bold))
+        [Console]::WriteLine((Format-AnsiText -Text ' runs multiple glmeta actions in one reviewed workflow.' -Color @(110, 120, 145)))
         [Console]::WriteLine('')
         $action = Select-MenuValue -Title 'SELECT WORKFLOW' -Items $mainItems
         if ($null -eq $action -or $action -eq 'exit') { return }
@@ -184,7 +192,7 @@ function Invoke-GlmetaMenu {
             'init' {
                 $kind = Select-MenuValue -Title 'INITIALIZE REPOSITORY' -Items @(
                     (New-MenuItem 'Local configuration' 'local' 'create or validate root configuration only')
-                    (New-MenuItem 'Configuration and GitLab' 'gitlab' 'initialize then synchronize project metadata')
+                    (New-MenuItem 'Configuration and GitLab' 'gitlab' 'initialize then synchronize project metadata' -MultiAction)
                 )
                 if ($null -eq $kind) { continue }
                 $p = if ($kind -eq 'gitlab') { [ordered]@{ Bootstrap = $true } } else { [ordered]@{ Init = $true } }
@@ -193,9 +201,9 @@ function Invoke-GlmetaMenu {
             }
             'prep_release' {
                 $kind = Select-MenuValue -Title 'PREP RELEASE' -Items @(
-                    (New-MenuItem 'Preview release preparation' 'preview' 'inspect every generated release file')
-                    (New-MenuItem 'Apply release preparation' 'apply' 'update manifests, docs, READMEs, and mr.md')
-                    (New-MenuItem 'Apply and commit' 'commit' 'update then review the release-file commit')
+                    (New-MenuItem 'Preview release preparation' 'preview' 'inspect every generated release file' -MultiAction)
+                    (New-MenuItem 'Apply release preparation' 'apply' 'update manifests, docs, READMEs, and mr.md' -MultiAction)
+                    (New-MenuItem 'Apply and commit' 'commit' 'update then review the release-file commit' -MultiAction)
                 )
                 if ($null -eq $kind) { continue }
                 $p = [ordered]@{ PrepRelease = $true }
@@ -206,8 +214,8 @@ function Invoke-GlmetaMenu {
             }
             'local' {
                 $choice = Select-MenuValue -Title 'LOCAL METADATA' -Items @(
-                    (New-MenuItem 'Preview all' 'preview_all' 'version, header, and TOC without writes')
-                    (New-MenuItem 'Apply all' 'apply_all' 'version, header, and TOC')
+                    (New-MenuItem 'Preview all' 'preview_all' 'version, header, and TOC without writes' -MultiAction)
+                    (New-MenuItem 'Apply all' 'apply_all' 'version, header, and TOC' -MultiAction)
                     (New-MenuItem 'Version only' 'version' 'package.json and jsr.jsonc manifests')
                     (New-MenuItem 'README header only' 'header' 'configured project identity and badges')
                     (New-MenuItem 'README TOC only' 'toc' 'managed table of contents')
@@ -240,8 +248,8 @@ function Invoke-GlmetaMenu {
             'merge_request' {
                 $kind = Select-MenuValue -Title 'MERGE REQUEST' -Items @(
                     (New-MenuItem 'Generate mr.md' 'document' 'update the local merge-request document')
-                    (New-MenuItem 'Generate and create on GitLab' 'create' 'publish a new merge request after generation')
-                    (New-MenuItem 'Generate and update on GitLab' 'update' 'replace the matching open merge request')
+                    (New-MenuItem 'Generate and create on GitLab' 'create' 'publish a new merge request after generation' -MultiAction)
+                    (New-MenuItem 'Generate and update on GitLab' 'update' 'replace the matching open merge request' -MultiAction)
                 )
                 if ($null -eq $kind) { continue }
                 $p = [ordered]@{}
@@ -268,7 +276,7 @@ function Invoke-GlmetaMenu {
             'commit' {
                 $kind = Select-MenuValue -Title 'COMMIT WORKFLOW' -Items @(
                     (New-MenuItem 'Commit current changes' 'current' 'skip metadata generation')
-                    (New-MenuItem 'Metadata and commit' 'metadata' 'run local metadata before committing')
+                    (New-MenuItem 'Metadata and commit' 'metadata' 'run local metadata before committing' -MultiAction)
                     (New-MenuItem 'Preview commit' 'preview' 'do not stage repository changes')
                 )
                 if ($null -eq $kind) { continue }
