@@ -1,6 +1,6 @@
-# glmeta
+# rivet
 
-Glmeta provides repository metadata, release, GitLab, commit, and history automation for JavaScript repositories.
+Rivet provides repository metadata, release, GitLab, commit, and history automation for JavaScript repositories.
 
 ```text
           /$$                           /$$
@@ -18,35 +18,35 @@ Glmeta provides repository metadata, release, GitLab, commit, and history automa
 
 ## Installation in consuming repositories
 
-Add `glm.ps1` to the consuming repository root and ignore `/glmeta/`. The launcher clones `https://gitlab.com/staticcanvas/glmeta.git` on first use, unless `GLMETA_REPOSITORY_URL` provides another source, then forwards all arguments with the consuming repository root explicitly selected.
+Add `rivet.ps1` to the consuming repository root and ignore `/rivet/`. The launcher clones `https://gitlab.com/staticcanvas/rivet.git` on first use, unless `RIVET_REPOSITORY_URL` provides another source, then forwards all arguments with the consuming repository root explicitly selected.
 
-```powershell {title="glm.ps1"}
-./glm.ps1 doctor
-./glm.ps1 menu
-./glm.ps1 prep-release -DryRun
+```powershell {title="rivet.ps1"}
+./rivet.ps1 doctor
+./rivet.ps1 menu
+./rivet.ps1 prep-release -DryRun
 ```
 
 Direct development invocation remains supported when the consuming repository is explicit:
 
-```powershell {title="glmeta/run.ps1"}
-./glmeta/run.ps1 -RepositoryRoot $PWD status
+```powershell {title="rivet/run.ps1"}
+./rivet/run.ps1 -RepositoryRoot $PWD status
 ```
 
 ## Repository initialization
 
 ### Conceptual
 
-Glmeta discovers the consuming repository with Git, so the cloned tool can live at any depth. Project-owned state remains at the repository root in `repo_config.json` and `repo_meta.json`; replacing or upgrading the cloned glmeta directory cannot overwrite that state. Generic initialization, JavaScript configuration, CI, and README-header templates remain under `templates/js`.
+Rivet discovers the consuming repository with Git, so the cloned tool can live at any depth. Project-owned state remains at the repository root in `repo_config.json` and `repo_meta.json`; replacing or upgrading the cloned rivet directory cannot overwrite that state. Generic initialization, JavaScript configuration, CI, and README-header templates remain under `templates/js`.
 
 The idempotent initializer infers package, namespace, GitLab path, current branch, and display-name defaults. It creates only missing root files, validates an existing `repo_config.json`, and never overwrites either configuration file.
 
 ### Strict reference
 
-```powershell {title="glm.ps1"}
-./glm.ps1 init -DryRun
-./glm.ps1 init
-./glm.ps1 bootstrap -DryRun
-./glm.ps1 bootstrap
+```powershell {title="rivet.ps1"}
+./rivet.ps1 init -DryRun
+./rivet.ps1 init
+./rivet.ps1 bootstrap -DryRun
+./rivet.ps1 bootstrap
 ```
 
 ## Local metadata chores
@@ -61,27 +61,27 @@ Run `run.ps1` from any working directory inside the consuming Git repository. Th
 
 ### Strict reference
 
-```powershell {title="glm.ps1"}
-./glm.ps1
+```powershell {title="rivet.ps1"}
+./rivet.ps1
 ```
 
 Preview local changes without writing files:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 -DryRun
-./glm.ps1 readme
+```powershell {title="rivet.ps1"}
+./rivet.ps1 -DryRun
+./rivet.ps1 readme
 ```
 
 Open the colored terminal manual, grouped by workflow with runnable examples beneath the parameter reference, or inspect one parameter in full:
 
-```powershell {title="glmeta/help.ps1"}
-./glm.ps1 help
-./glm.ps1 help glo
-./glm.ps1 help -Param Commit
-./glm.ps1 -Help
-./glmeta/help.ps1
-./glmeta/help.ps1 -Param Commit
-./glmeta/help.ps1 -Param glo
+```powershell {title="rivet/help.ps1"}
+./rivet.ps1 help
+./rivet.ps1 help glo
+./rivet.ps1 help -Param Commit
+./rivet.ps1 -Help
+./rivet/help.ps1
+./rivet/help.ps1 -Param Commit
+./rivet/help.ps1 -Param glo
 ```
 
 The version calculator uses the nearest reachable Git tag, matching the canonical `Get-ConventionalCommitVersion` behavior. It scans commits after that tag in Git log order and applies every Conventional Commit bump cumulatively. Each breaking change increments major, each feature increments minor, and each fix or performance commit increments patch while resetting lower components according to SemVer.
@@ -90,13 +90,15 @@ The version calculator uses the nearest reachable Git tag, matching the canonica
 
 ### Conceptual
 
-The command center exposes every glmeta workflow through `Show-SMenu`. Menus are organized by task rather than raw switches: Prep Release, local metadata, release documents, merge-request generation and publication, GitLab metadata, Conventional Commits, tagging and publishing, Git history, and help. Each workflow collects only its relevant options, renders the exact `run.ps1` command, and requires a final Run or Back selection. The `[MA]` tag identifies a compound workflow that runs multiple glmeta actions; the tag appears on both its main-menu category and the exact compound submenu choices.
+The command center exposes every rivet workflow through `Show-SMenu`. Menus are organized by task rather than raw switches: Prep Release, local metadata, release documents, merge-request generation and publication, GitLab metadata, Conventional Commits, tagging and publishing, Git history, and help. Each workflow collects only its relevant options, renders the exact `run.ps1` command, and requires a final Run or Back selection. The `[MA]` tag identifies a compound workflow that runs multiple rivet actions; the tag appears on both its main-menu category and the exact compound submenu choices.
 
-Action-specific workflows automatically skip unrelated local metadata work. Preview mode is the initial choice for release, merge-request, and GitLab operations. Remote label deletion defaults off. Escape cancels the current selection, returns to the prior screen, or exits at the main menu. The interface loads the display name from `repo_config.json`, contains no repository-specific hardcoded execution paths, and can move with the complete `glmeta` runner to another JavaScript repository.
+Action-specific workflows automatically skip unrelated local metadata work. Preview mode is the initial choice for release, merge-request, and GitLab operations. Remote label deletion defaults off. Escape cancels the current selection, returns to the prior screen, or exits at the main menu. The interface loads the display name from `repo_config.json`, contains no repository-specific hardcoded execution paths, and can move with the complete `rivet` runner to another JavaScript repository.
 
-Release-document workflows can also write `docs/data/changelog.json` with `-UpdateChangelogJson`. Git history supplies the parsed change model, `CHANGELOG.md` remains the complete canonical human record, and the JSON projection retains only version-bumping breaking, `feat`, `fix`, and `perf` commits for documentation sites. Existing JSON release records are preserved when the current version is refreshed.
+Release-document workflows can also write `docs/data/changelog.json` with `-UpdateChangelogJson`. Git history supplies exact metadata for the selected range, while every version and note is projected from the canonical `CHANGELOG.md` in document order. Historical notes without embedded Git metadata remain present with null metadata fields instead of receiving inferred hashes, types, scopes, or ranges.
 
-`Show-SMenu` redraws by moving upward exactly the number of rows owned by the menu instead of relying on a terminal-global saved cursor. This prevents blocking and duplicated rows in PTYs, containers, SSH sessions, and nested prompts. Selected labels use a bold italic truecolor gradient and one additional left-padding column; descriptions use a separate subdued palette. Rows are measured before ANSI encoding, reserve the final terminal column, and truncate descriptions when required.
+`Show-SMenu` owns the alternate screen while the command center is active and polls terminal dimensions independently of keyboard input. A resize triggers one atomic frame redraw. Wide terminals use label and description columns; narrow terminals stack the selected description; short terminals reduce the visible viewport while preserving access through arrows, Page Up, Page Down, Home, and End. Text is measured before ANSI encoding through the shared `Clap` helpers. Selected detail wraps at word boundaries, and `[MA]` follows the workflow title so scanning begins with the action name.
+
+Command review and workflow-result views use the shared rounded-panel renderer. Long commands wrap to the current content width before coloring. Workflow results include completion state and elapsed time, and terminal cursor/alternate-buffer state is restored in `finally` blocks after selection, cancellation, failure, or exit.
 
 The command-center identity line assigns separate semantic colors to the project name, package name, and package version. Version-report bump inputs and repository status values use the same palette for major, minor, patch, clean, warning, and failure states.
 
@@ -104,9 +106,9 @@ The command-center identity line assigns separate semantic colors to the project
 
 Open the command center with either supported form:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 menu
-./glm.ps1 -Menu
+```powershell {title="rivet.ps1"}
+./rivet.ps1 menu
+./rivet.ps1 -Menu
 ```
 
 ## Release preparation
@@ -119,10 +121,10 @@ Preparation does not stage files by itself. Adding `-Commit` opens the normal pa
 
 ### Strict reference
 
-```powershell {title="glm.ps1"}
-./glm.ps1 prep-release -DryRun
-./glm.ps1 prep-release
-./glm.ps1 prep-release -Commit
+```powershell {title="rivet.ps1"}
+./rivet.ps1 prep-release -DryRun
+./rivet.ps1 prep-release
+./rivet.ps1 prep-release -Commit
 ```
 
 ## Tagging and publishing
@@ -133,36 +135,36 @@ Preparation does not stage files by itself. Adding `-Commit` opens the normal pa
 
 `-Snapshot` creates a plain SemVer tag such as `v0.28.0`. GitLab CI validates and builds the checkpoint without publishing packages or creating a production release. The `*-release` pattern can therefore be protected independently in GitLab.
 
-Before publication, glmeta refreshes the configured remote and requires a clean worktree, an upstream branch that is not behind or diverged, matching manifest versions, and no conflicting tag. If the branch is locally ahead, the branch and tag are pushed atomically. A failed push removes a tag created by that attempt, while a matching pre-existing local tag can be retried. `-DryRun` reports blockers and `-TagForce` permits explicitly reviewed non-interactive automation. Existing unrelated tags are never pushed.
+Before publication, rivet refreshes the configured remote and requires a clean worktree, an upstream branch that is not behind or diverged, matching manifest versions, and no conflicting tag. If the branch is locally ahead, the branch and tag are pushed atomically. A failed push removes a tag created by that attempt, while a matching pre-existing local tag can be retried. `-DryRun` reports blockers and `-TagForce` permits explicitly reviewed non-interactive automation. Existing unrelated tags are never pushed.
 
 ### Strict reference
 
 Preview a calculated production tag:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 -Tag -DryRun
+```powershell {title="rivet.ps1"}
+./rivet.ps1 -Tag -DryRun
 ```
 
 Preview a validation-only snapshot tag:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 -Tag -Snapshot -DryRun
+```powershell {title="rivet.ps1"}
+./rivet.ps1 -Tag -Snapshot -DryRun
 ```
 
 Review and push an explicit production version:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 -Tag -TagVersion 0.29.0
+```powershell {title="rivet.ps1"}
+./rivet.ps1 -Tag -TagVersion 0.29.0
 ```
 
 ## Diagnostics and readiness
 
 Use the read-only operational commands before commits or releases:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 doctor
-./glm.ps1 status
-./glm.ps1 version
+```powershell {title="rivet.ps1"}
+./rivet.ps1 doctor
+./rivet.ps1 status
+./rivet.ps1 version
 ```
 
 `doctor` validates dependencies, configuration, required files, commit defaults, and optional credentials. `status` summarizes worktree, upstream, version, and next tags. `version` explains the stable-tag baseline and the bump effect of every subsequent commit.
@@ -179,14 +181,14 @@ The history is surrounded by repository detail: current branch and HEAD, upstrea
 
 Show the latest 25 commits:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 -glo
+```powershell {title="rivet.ps1"}
+./rivet.ps1 -glo
 ```
 
 Show 75 non-merge commits across all refs:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 -glo -GitLogCount 75 -GitLogAll -GitLogNoMerges
+```powershell {title="rivet.ps1"}
+./rivet.ps1 -glo -GitLogCount 75 -GitLogAll -GitLogNoMerges
 ```
 
 ## Conventional Commit workflow
@@ -195,26 +197,26 @@ Show 75 non-merge commits across all refs:
 
 Pass `-Commit` to run the metadata actions and then open an interactive Conventional Commit workflow. `Show-SMenu` provides ordered type, scope, and file selection without clearing the terminal. Scope path patterns suggest the initial file selection. The review displays the exact subject, extracted release note, selected and excluded paths, diff totals, and patch before staging occurs. Confirming stages only the reviewed paths and creates one commit; declining leaves the index and working tree unchanged.
 
-Commit types, scopes, and defaults are repository configuration rather than runner code, so the `glmeta` runner and configuration can be shared across JavaScript repositories and adjusted in one JSON object. Explicit parameters support scripts and dry-run validation without keyboard menus.
+Commit types, scopes, and defaults are repository configuration rather than runner code, so the `rivet` runner and configuration can be shared across JavaScript repositories and adjusted in one JSON object. Explicit parameters support scripts and dry-run validation without keyboard menus.
 
 ### Strict reference
 
 Open the interactive workflow after normal metadata maintenance:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 -Commit
+```powershell {title="rivet.ps1"}
+./rivet.ps1 -Commit
 ```
 
 Preview a fully automated selection without staging files:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 `
+```powershell {title="rivet.ps1"}
+./rivet.ps1 `
   -SkipVersion `
   -SkipReadmeMetadata `
   -SkipTableOfContents `
   -Commit `
   -CommitType feat `
-  -CommitScope glmeta `
+  -CommitScope rivet `
   -CommitDescription 'add interactive commit workflow' `
   -DryRun
 ```
@@ -225,14 +227,14 @@ Preview a fully automated selection without staging files:
 
 Release-document generation queries GitLab and reads non-merge commits after the newest release tag reachable from `HEAD`. Ordinary repository tags without a GitLab release are ignored. Conventional Commit types map to Added, Changed, Deprecated, Removed, Fixed, and Security. Non-conventional commit subjects are retained under Changed so the selected range is not silently incomplete. Every generated change includes its seven-character hash as a GitLab commit link and its Git author as an `@username` mention when the name is a valid GitLab username. Names containing spaces remain plain text. Pass `-IncludeCommitHash:$false` or `-IncludeAuthor:$false` to omit either field. `-CommitScope core` filters entries to the exact parsed `core` scope rather than matching arbitrary subject text.
 
-Only content between `glmeta:changelog` and `glmeta:release-notes` markers is replaced. Text outside those markers remains manually editable. `release-notes.md` intentionally has no generated H1 because the CI release job nests its contents beneath the release description's `## Notes` heading. `-FromTag` overrides the automatic baseline with any Git ref that is an ancestor of `HEAD`, allowing a release to skip snapshot or intermediate releases. The override affects release documents only and never changes package-version calculation.
+Only content between `rivet:changelog` and `rivet:release-notes` markers is replaced. Legacy `glmeta:*` markers are accepted and migrated when a document is next generated. When changelog markers move to another version, their prior body is retained as immutable release content. Draft markers are always placed under `Unreleased`; finalized markers are placed under the requested version. Finalization is rejected when its version already matches the baseline tag but `HEAD` contains later commits, preventing maintenance changes from being relabeled as an existing release. `release-notes.md` intentionally has no generated H1 because the CI release job nests its contents beneath the release description's `## Notes` heading. `-FromTag` overrides the automatic baseline with any Git ref that is an ancestor of `HEAD`, allowing a release to skip snapshot or intermediate releases. The override affects release documents only and never changes package-version calculation.
 
 ### Strict reference
 
 Preview a draft from the latest reachable GitLab release tag:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 `
+```powershell {title="rivet.ps1"}
+./rivet.ps1 `
   -SkipVersion `
   -SkipReadmeMetadata `
   -SkipTableOfContents `
@@ -242,8 +244,8 @@ Preview a draft from the latest reachable GitLab release tag:
 
 Generate from an older explicit baseline:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 `
+```powershell {title="rivet.ps1"}
+./rivet.ps1 `
   -SkipVersion `
   -SkipReadmeMetadata `
   -SkipTableOfContents `
@@ -253,8 +255,8 @@ Generate from an older explicit baseline:
 
 Finalize a dated release section:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 `
+```powershell {title="rivet.ps1"}
+./rivet.ps1 `
   -SkipVersion `
   -SkipReadmeMetadata `
   -SkipTableOfContents `
@@ -267,7 +269,7 @@ Finalize a dated release section:
 
 ### Conceptual
 
-Merge-request generation uses the existing root `mr.md` as its working template. Because root `mr.md` is intentionally ignored by Git, a missing working file is seeded from the tracked `glmeta/templates/mr.md` template. The generator updates the title, source branch, target branch, change range, and the marker-bounded Summary list while preserving manually maintained Compatibility, Validation, and Review notes. It also ensures the npm and JSR package-version task is the final item in the Release checklist.
+Merge-request generation uses the existing root `mr.md` as its working template. Because root `mr.md` is intentionally ignored by Git, a missing working file is seeded from the tracked `rivet/templates/mr.md` template. The generator updates the title, source branch, target branch, change range, and the marker-bounded Summary list while preserving manually maintained Compatibility, Validation, and Review notes. It also ensures the npm and JSR package-version task is the final item in the Release checklist.
 
 Generated Summary items include the short commit hash followed by the commit author. These use the same default-on metadata switches as changelog and release-note generation.
 
@@ -275,8 +277,8 @@ Generated Summary items include the short commit hash followed by the commit aut
 
 Update `mr.md` from the latest reachable stable SemVer tag:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 `
+```powershell {title="rivet.ps1"}
+./rivet.ps1 `
   -SkipVersion `
   -SkipReadmeMetadata `
   -SkipTableOfContents `
@@ -285,8 +287,8 @@ Update `mr.md` from the latest reachable stable SemVer tag:
 
 Generate without commit metadata and select the target branch explicitly:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 `
+```powershell {title="rivet.ps1"}
+./rivet.ps1 `
   -SkipVersion `
   -SkipReadmeMetadata `
   -SkipTableOfContents `
@@ -300,28 +302,35 @@ Generate without commit metadata and select the target branch explicitly:
 
 ### Conceptual
 
-Glmeta can create a GitLab merge request from `mr.md` or update the matching open merge request. The title, source branch, target branch, and Markdown description remain document-driven. Create mode rejects an existing open request for the same branch pair; update mode requires exactly one match. Both modes read the configured token environment variable, hide the token from output, and enable source-branch removal after merge.
+Rivet can create a GitLab merge request from `mr.md` or update the matching open merge request. The title, source branch, target branch, and Markdown description remain document-driven. Create mode rejects an existing open request for the same branch pair; update mode requires exactly one match. Both modes read the configured token environment variable, hide the token from output, and enable source-branch removal after merge.
 
 ### Strict reference
 
-```powershell {title="glm.ps1"}
-./glm.ps1 -UpdateMergeRequest -CreateGitLabMergeRequest -DryRun
-./glm.ps1 -UpdateMergeRequest -CreateGitLabMergeRequest
-./glm.ps1 -UpdateMergeRequest -UpdateGitLabMergeRequest -DryRun
-./glm.ps1 -UpdateMergeRequest -UpdateGitLabMergeRequest
+```powershell {title="rivet.ps1"}
+./rivet.ps1 -UpdateMergeRequest -CreateGitLabMergeRequest -DryRun
+./rivet.ps1 -UpdateMergeRequest -CreateGitLabMergeRequest
+./rivet.ps1 -UpdateMergeRequest -UpdateGitLabMergeRequest -DryRun
+./rivet.ps1 -UpdateMergeRequest -UpdateGitLabMergeRequest
 ```
 
 ## Script responsibilities
 
-`run.ps1` is the supported entry point for routine use. Files under `scripts/` are focused implementation units and may also be dot-sourced or invoked directly when developing or diagnosing one action.
+`run.ps1` is the supported entry point for routine use. It imports `rivet.psd1` once; the root module loads an explicit allow-list of reviewed runtime helpers and action files. Adding a file beneath `scripts/helpers/` does not place it in the runtime or public command surface. Import the manifest when developing or diagnosing an individual exported action instead of recreating the loader order.
+
+```powershell {title="module development"}
+Import-Module ./rivet.psd1 -DisableNameChecking
+Get-Command -Module Rivet
+```
 
 | Script                                                                           | Invocation  | Responsibility                                                                                                             |
 | -------------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
 | [`run.ps1`](run.ps1)                                                             | Direct      | Orchestrates local metadata actions, optional GitLab synchronization, live action logs, and the final report.              |
+| [`rivet.psd1`](rivet.psd1)                                                     | Import      | Declares the supported module metadata and intentionally exported command surface.                                         |
+| [`rivet.psm1`](rivet.psm1)                                                     | Module      | Loads the reviewed runtime allow-list while keeping experimental and foreign helpers isolated.                             |
 | [`help.ps1`](help.ps1)                                                           | Direct      | Renders the complete colored runner manual or detailed knowledge and examples for one parameter or alias.                  |
-| [`Invoke-GlmetaMenu.ps1`](scripts/Invoke-GlmetaMenu.ps1)                         | Dot-sourced | Builds, reviews, and dispatches workflow-specific runner commands through Show-SMenu.                                      |
-| [`Get-GlmetaConfiguration.ps1`](scripts/Get-GlmetaConfiguration.ps1)             | Dot-sourced | Loads root configuration, validates required fields, and resolves GitLab author mappings.                                  |
-| [`Initialize-GlmetaRepository.ps1`](scripts/Initialize-GlmetaRepository.ps1)     | Dot-sourced | Creates missing root configuration from reusable JavaScript templates without overwriting existing state.                  |
+| [`Invoke-RivetMenu.ps1`](scripts/Invoke-RivetMenu.ps1)                         | Dot-sourced | Builds, reviews, and dispatches workflow-specific runner commands through Show-SMenu.                                      |
+| [`Get-RivetConfiguration.ps1`](scripts/Get-RivetConfiguration.ps1)             | Dot-sourced | Loads root configuration, validates required fields, and resolves GitLab author mappings.                                  |
+| [`Initialize-RivetRepository.ps1`](scripts/Initialize-RivetRepository.ps1)     | Dot-sourced | Creates missing root configuration from reusable JavaScript templates without overwriting existing state.                  |
 | [`Test-ReadmeStructure.ps1`](scripts/Test-ReadmeStructure.ps1)                   | Dot-sourced | Reports required README heading presence while ignoring fenced-code examples.                                               |
 | [`Get-ConventionalCommitVersion.ps1`](scripts/Get-ConventionalCommitVersion.ps1) | Dot-sourced | Finds the latest reachable stable tag and calculates the next SemVer version from Conventional Commits.                    |
 | [`Update-JSLibSemver.ps1`](scripts/Update-JSLibSemver.ps1)                       | Dot-sourced | Applies one version to package.json, jsr.jsonc, and root package-lock.json package identities.                            |
@@ -331,9 +340,9 @@ Glmeta can create a GitLab merge request from `mr.md` or update the matching ope
 | [`Invoke-RepositoryCommit.ps1`](scripts/Invoke-RepositoryCommit.ps1)             | Dot-sourced | Builds, reviews, stages, and submits one repository-configured Conventional Commit.                                |
 | [`Invoke-RepositoryTag.ps1`](scripts/Invoke-RepositoryTag.ps1)                   | Dot-sourced | Reviews, validates, creates, and explicitly pushes one snapshot or production tag.                                 |
 | [`Write-PrettyGitLog.ps1`](scripts/Write-PrettyGitLog.ps1)                       | Dot-sourced | Renders dense per-commit records and repository, history, upstream, and worktree details.                           |
-| [`Write-GlmetaVersionReport.ps1`](scripts/Write-GlmetaVersionReport.ps1)           | Dot-sourced | Explains the version baseline, result, and per-commit bump inputs.                                                   |
-| [`Write-GlmetaRepositoryStatus.ps1`](scripts/Write-GlmetaRepositoryStatus.ps1)     | Dot-sourced | Displays read-only repository, upstream, worktree, version, and tag state.                                          |
-| [`Test-GlmetaRepository.ps1`](scripts/Test-GlmetaRepository.ps1)                   | Dot-sourced | Validates local dependencies, required files, configuration, defaults, and optional credentials.                    |
+| [`Write-RivetVersionReport.ps1`](scripts/Write-RivetVersionReport.ps1)           | Dot-sourced | Explains the version baseline, result, and per-commit bump inputs.                                                   |
+| [`Write-RivetRepositoryStatus.ps1`](scripts/Write-RivetRepositoryStatus.ps1)     | Dot-sourced | Displays read-only repository, upstream, worktree, version, and tag state.                                          |
+| [`Test-RivetRepository.ps1`](scripts/Test-RivetRepository.ps1)                   | Dot-sourced | Validates local dependencies, required files, configuration, defaults, and optional credentials.                    |
 | [`smenu.ps1`](scripts/smenu.ps1)                                                 | Dot-sourced | Returns a value from an ordered, cursor-controlled terminal selection menu.                                        |
 | [`jsheader.ps1`](scripts/jsheader.ps1)                                           | Dot-sourced | Renders the reusable header template from root configuration, metadata, and the latest supported tag.                       |
 | [`New-MarkdownTOC.ps1`](scripts/New-MarkdownTOC.ps1)                             | Dot-sourced | Generates headings and replaces only the content inside the existing collapsible table-of-contents block.                  |
@@ -353,9 +362,9 @@ Remote synchronization is opt-in. The generator reads connection settings from `
 
 Preview remote changes:
 
-```powershell {title="glm.ps1"}
+```powershell {title="rivet.ps1"}
 $env:GITLAB_API_KEY = '<token-from-secret-store>'
-./glm.ps1 `
+./rivet.ps1 `
   -SkipVersion `
   -SkipReadmeMetadata `
   -SkipTableOfContents `
@@ -365,8 +374,8 @@ $env:GITLAB_API_KEY = '<token-from-secret-store>'
 
 Apply remote metadata without deleting unmanaged labels:
 
-```powershell {title="glm.ps1"}
-./glm.ps1 `
+```powershell {title="rivet.ps1"}
+./rivet.ps1 `
   -SkipVersion `
   -SkipReadmeMetadata `
   -SkipTableOfContents `
@@ -376,20 +385,23 @@ Apply remote metadata without deleting unmanaged labels:
 ## Layout
 
 ```text
-glmeta/
+rivet/
 ├── README.md
+├── rivet.psd1            # Versioned public module manifest
+├── rivet.psm1            # Curated runtime loader and export boundary
 ├── help.ps1               # Colored manual and per-parameter reference
 ├── run.ps1                # Public orchestration entry point
 ├── templates/
 │   ├── mr.md              # Tracked seed for the ignored root merge-request document
 │   └── js/                # Generic JS configuration, CI, and README templates
 ├── tests/
-│   └── Glmeta.Tests.ps1   # Isolated Pester integration and unit coverage
+│   └── Rivet.Tests.ps1   # Isolated Pester integration and unit coverage
 └── scripts/
-    ├── Get-GlmetaConfiguration.ps1
+    ├── helpers/           # Helper library; only module allow-listed files enter runtime
+    ├── Get-RivetConfiguration.ps1
     ├── Get-ConventionalCommitVersion.ps1
-    ├── Initialize-GlmetaRepository.ps1
-    ├── Invoke-GlmetaMenu.ps1
+    ├── Initialize-RivetRepository.ps1
+    ├── Invoke-RivetMenu.ps1
     ├── Invoke-RepositoryCommit.ps1
     ├── Invoke-RepositoryTag.ps1
     ├── New-MarkdownTOC.ps1
@@ -400,9 +412,9 @@ glmeta/
     ├── Update-ReleaseDocumentation.ps1
     ├── Update-MergeRequestDocumentation.ps1
     ├── Write-PrettyGitLog.ps1
-    ├── Write-GlmetaRepositoryStatus.ps1
-    ├── Write-GlmetaVersionReport.ps1
-    ├── Test-GlmetaRepository.ps1
+    ├── Write-RivetRepositoryStatus.ps1
+    ├── Write-RivetVersionReport.ps1
+    ├── Test-RivetRepository.ps1
     ├── Test-ReadmeStructure.ps1
     ├── jsheader.ps1
     └── Sync-GitLabRepositoryMetadata.ps1
@@ -451,9 +463,9 @@ flowchart TD
 
 ### Conceptual
 
-Glmeta exports structured data directly consumed by static site generators (SSGs) such as Hugo, Eleventy (11ty), and Jekyll:
+Rivet exports structured data directly consumed by static site generators (SSGs) such as Hugo, Eleventy (11ty), and Jekyll:
 
-1. **`docs/data/changelog.json`**: Generated when running `./glm.ps1 -UpdateReleaseDocs -UpdateChangelogJson` or during release preparation (`prep-release`). It projects version-bumping commits (`feat`, `fix`, `perf`, breaking changes) alongside commit hashes, dates, categories, and mapped GitLab author references.
+1. **`docs/data/changelog.json`**: Generated when running `./rivet.ps1 -UpdateReleaseDocs -UpdateChangelogJson` or during release preparation (`prep-release`). It projects every version and note from `CHANGELOG.md`, enriched with commit hashes, categories, scopes, and mapped GitLab authors when Git metadata is available.
 2. **`docs/data/releases.json`**: Generated by the release pipeline or `Get-ReleaseDownloads.ps1`. It catalogues tagged releases, asset download URLs, checksums, archive links, and bundle variants (minified vs unminified).
 
 ### Hugo
@@ -490,7 +502,7 @@ Hugo automatically loads JSON files located in `docs/data/` (or `data/`) into th
           {{ end }}
         {{ end }}
       {{ else }}
-        <p>No version-bumping changes recorded for this range.</p>
+        <p>No changelog notes are recorded for this version.</p>
       {{ end }}
     </section>
   {{ end }}
@@ -591,6 +603,8 @@ Jekyll automatically parses JSON files in the `_data/` folder and exposes them v
 | `SkipReadmeValidation` | `switch`            | `false` | Skips the required-heading contract during the default run.                               |
 | `UpdateReleaseDocs`   | `switch`             | `false` | Updates marker-bounded draft changelog and release-note content.                         |
 | `FinalizeRelease`     | `switch`             | `false` | Generates release documents under the dated version heading; implies release-doc update. |
+| `RebuildChangelog`    | `switch`             | `false` | Rebuilds entire `CHANGELOG.md` and `docs/data/changelog.json` across all Git tags.       |
+| `UpdateChangelogJson` | `switch`             | `false` | Generates curated `docs/data/changelog.json` structured projection from `CHANGELOG.md`.   |
 | `UpdateMergeRequest`  | `switch`             | `false` | Updates generated fields and the managed change list in `mr.md`.                          |
 | `CreateGitLabMergeRequest` | `switch`        | `false` | Creates a GitLab merge request from `mr.md`; rejects a duplicate open branch pair.         |
 | `UpdateGitLabMergeRequest` | `switch`        | `false` | Updates the matching open GitLab merge request from `mr.md`.                               |
@@ -615,7 +629,7 @@ Jekyll automatically parses JSON files in the `_data/` folder and exposes them v
 | `GitLogCount`         | `integer`            | `25`    | Limits history output from 1 through 500 commits.                                         |
 | `GitLogAll`           | `switch`             | `false` | Reads commits reachable from all local and remote refs.                                   |
 | `GitLogNoMerges`      | `switch`             | `false` | Omits merge commits from history output.                                                  |
-| `RepositoryRoot`      | `string`             | current directory | Selects the consuming Git repository independently of the glmeta checkout.       |
+| `RepositoryRoot`      | `string`             | current directory | Selects the consuming Git repository independently of the rivet checkout.       |
 | `ConfigPath`          | `string`             | root `repo_config.json` | Overrides configuration discovery without changing repository discovery.        |
 | `DryRun`              | `switch`             | `false` | Reports local and remote changes without applying them.                                  |
 | `GITLAB_API_KEY`      | environment variable | unset   | GitLab token used only when remote synchronization is requested.                         |

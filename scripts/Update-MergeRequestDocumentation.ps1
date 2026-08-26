@@ -43,7 +43,7 @@ function Update-MergeRequestDocumentation {
     $repositoryPath = [System.IO.Path]::GetFullPath($RepositoryRoot)
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw 'Git is required to generate merge-request documentation.' }
     if ([string]::IsNullOrWhiteSpace($ConfigPath)) { $ConfigPath = [System.IO.Path]::Combine($repositoryPath, 'repo_config.json') }
-    $config = Get-GlmetaConfiguration -ConfigPath $ConfigPath
+    $config = Get-RivetConfiguration -ConfigPath $ConfigPath
     $baseUri = ([string]$config.gitlab.baseUri).TrimEnd('/')
     $projectPath = ([string]$config.project.path).Trim('/')
     $projectName = [string]$config.project.displayName
@@ -93,8 +93,8 @@ function Update-MergeRequestDocumentation {
     $path = [System.IO.Path]::Combine($repositoryPath, 'mr.md')
     $templateCandidates = @(
         [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($PSScriptRoot, '..', 'templates', 'mr.md')),
-        [System.IO.Path]::Combine($repositoryPath, 'glmeta', 'templates', 'mr.md'),
-        [System.IO.Path]::Combine($repositoryPath, 'tools', 'glmeta', 'templates', 'mr.md')
+        [System.IO.Path]::Combine($repositoryPath, 'rivet', 'templates', 'mr.md'),
+        [System.IO.Path]::Combine($repositoryPath, 'tools', 'rivet', 'templates', 'mr.md')
     )
     $templatePath = $templateCandidates | Where-Object { [System.IO.File]::Exists($_) } | Select-Object -First 1
     if ([System.IO.File]::Exists($path)) {
@@ -111,10 +111,10 @@ function Update-MergeRequestDocumentation {
     $updated = [regex]::Replace($updated, '(?ms)(^## Target branch\s+).*?(?=^## Change range)', "`$1``$TargetBranch```n`n".Replace("`n", $lineEnding), 1)
     $updated = [regex]::Replace($updated, '(?ms)(^## Change range\s+).*?(?=^## Summary)', "`$1All changes after ``$FromTag`` through the current ``$sourceBranch`` branch.`n`n".Replace("`n", $lineEnding), 1)
 
-    $summaryStart = '<!-- glmeta:mr-changes:start -->'
-    $summaryEnd = '<!-- glmeta:mr-changes:end -->'
+    $summaryStart = '<!-- rivet:mr-changes:start -->'
+    $summaryEnd = '<!-- rivet:mr-changes:end -->'
     $summaryBlock = "$summaryStart`n`n$($changes -join "`n")`n`n$summaryEnd".Replace("`n", $lineEnding)
-    $summaryPattern = '(?ms)<!-- glmeta:mr-changes:start -->.*?<!-- glmeta:mr-changes:end -->'
+    $summaryPattern = '(?ms)<!-- (?:rivet|glmeta):mr-changes:start -->.*?<!-- (?:rivet|glmeta):mr-changes:end -->'
     if ([regex]::IsMatch($updated, $summaryPattern)) {
         $updated = [regex]::Replace($updated, $summaryPattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($match) [void]$match; $summaryBlock }, 1)
     } else {

@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TUI Design Codex</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg: #0a0b0d;
+    --panel: #121316;
+    --panel-2: #17181c;
+    --border: #24272b;
+    --border-soft: #1c1e22;
+    --text: #d7dce1;
+    --dim: #6d7680;
+    --dimmer: #454b52;
+    --accent: #e8b968;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Mono', ui-monospace, monospace;
+    font-size:13px;
+    line-height:1.5;
+    min-height:100vh;
+  }
+  a{color:inherit;}
+
+  .shell{ display:grid; grid-template-columns:250px 1fr; min-height:100vh; }
+  @media (max-width: 860px){
+    .shell{grid-template-columns:1fr;}
+    .sidebar{position:static; border-right:none; border-bottom:1px solid var(--border); height:auto;}
+  }
+
+  .sidebar{
+    border-right:1px solid var(--border);
+    padding:20px 16px;
+    position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  }
+
+  .brand{ display:flex; align-items:baseline; gap:8px; margin-bottom:2px; }
+  .brand .glyph{color:var(--accent); font-weight:700;}
+  .brand h1{ font-size:14px; letter-spacing:0.06em; margin:0; font-weight:600; text-transform:uppercase; }
+  .brand-sub{ color:var(--dim); font-size:11px; margin:2px 0 20px 0; letter-spacing:0.02em; }
+
+  .search{
+    width:100%; background:var(--panel); border:1px solid var(--border); color:var(--text);
+    font-family:inherit; font-size:12px; padding:8px 10px; margin-bottom:18px;
+  }
+  .search::placeholder{color:var(--dimmer);}
+  .search:focus{outline:1px solid var(--dim); outline-offset:-1px;}
+
+  .nav-label{ font-size:10px; letter-spacing:0.1em; color:var(--dimmer); text-transform:uppercase; margin:0 0 8px 2px; }
+
+  .cat-list{list-style:none; margin:0 0 20px 0; padding:0;}
+  .cat-item{
+    display:flex; align-items:center; justify-content:space-between; padding:7px 8px; cursor:pointer;
+    border-left:2px solid transparent; color:var(--dim); font-size:12px;
+  }
+  .cat-item:hover{color:var(--text); background:var(--panel);}
+  .cat-item.active{ color:var(--text); background:var(--panel); border-left-color:var(--dot-color, var(--accent)); }
+  .cat-item .swatch{ display:inline-block; width:8px; height:8px; background:var(--dot-color, var(--dim)); margin-right:8px; flex-shrink:0; }
+  .cat-item .name{flex:1; display:flex; align-items:center;}
+  .cat-item .count{color:var(--dimmer); font-size:11px;}
+
+  .palette-btn{
+    width:100%; text-align:left; background:var(--panel); border:1px solid var(--border); color:var(--dim);
+    font-family:inherit; font-size:12px; padding:9px 10px; cursor:pointer; margin-bottom:20px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .palette-btn:hover, .palette-btn.active{ color:var(--text); border-color:var(--dim); }
+  .palette-btn .dots{display:flex; gap:3px;}
+  .palette-btn .dots span{width:7px; height:7px; display:inline-block;}
+
+  .meta-block{ border-top:1px solid var(--border-soft); padding-top:14px; color:var(--dimmer); font-size:11px; line-height:1.7; }
+  .meta-block b{color:var(--dim); font-weight:600;}
+
+  main{padding:24px 28px 60px;}
+
+  .top-row{
+    display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px;
+    margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:16px;
+  }
+  .top-row h2{ margin:0; font-size:15px; letter-spacing:0.03em; text-transform:uppercase; display:flex; align-items:center; gap:10px; }
+  .top-row .cat-desc{color:var(--dim); font-size:12px; margin-top:6px; max-width:60ch;}
+  .result-count{color:var(--dimmer); font-size:11px;}
+
+  .filter-row{ display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+  .filter-chip{
+    background:var(--panel); border:1px solid var(--border); color:var(--dim); font-family:inherit;
+    font-size:11px; padding:5px 10px; cursor:pointer;
+  }
+  .filter-chip:hover{color:var(--text); border-color:var(--dim);}
+  .filter-chip.active{color:var(--bg); background:var(--accent); border-color:var(--accent);}
+
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px; }
+
+  .card{
+    background:var(--panel); border:1px solid var(--border); cursor:pointer;
+    transition:border-color .12s ease, transform .12s ease; display:flex; flex-direction:column;
+  }
+  .card:hover{border-color:var(--dot-color, var(--dim)); transform:translateY(-1px);}
+
+  .card-bar{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--border); background:var(--panel-2); }
+  .card-bar .id-tag{ font-size:10px; letter-spacing:0.05em; color:var(--dot-color, var(--dim)); border:1px solid var(--dot-color, var(--border)); padding:1px 6px; }
+  .card-bar .title{ font-size:12px; font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .card-bar .cat-code{color:var(--dimmer); font-size:10px;}
+
+  .card-ascii{
+    margin:0; padding:14px 12px; font-size:11px; line-height:1.35; white-space:pre; overflow:hidden;
+    color:var(--ascii-color, var(--text)); background:var(--ascii-bg, transparent); flex:1; max-height:190px;
+  }
+  .card-foot{ padding:7px 10px; border-top:1px solid var(--border-soft); color:var(--dim); font-size:10.5px; display:flex; justify-content:space-between; gap:8px; }
+  .border-badge{ color:var(--dimmer); }
+
+  .card[data-cat="hacker"] .card-ascii{ text-shadow:0 0 6px rgba(57,255,20,0.35); }
+  .card[data-cat="retro"] .card-ascii{ text-shadow:0 0 5px rgba(255,176,0,0.3); }
+  .card[data-cat="neon"] .card-ascii{ text-shadow:0 0 7px rgba(255,47,176,0.45); }
+  .card[data-cat="brutalist"] .card-bar{ background:#ff3b3b; border-bottom-color:#ff3b3b; }
+  .card[data-cat="brutalist"] .card-bar .title, .card[data-cat="brutalist"] .card-bar .id-tag{ color:#0a0b0d; border-color:#0a0b0d; }
+  .card[data-cat="elegant"]{border-radius:6px; overflow:hidden;}
+  .card[data-cat="elegant"] .card-bar{border-radius:6px 6px 0 0;}
+
+  .empty{ color:var(--dimmer); padding:60px 0; text-align:center; font-size:12px; }
+
+  /* palette view */
+  .palette-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px; }
+  .palette-card{ background:var(--panel); border:1px solid var(--border); padding:16px; }
+  .palette-card h3{ margin:0 0 4px 0; font-size:13px; letter-spacing:0.02em; }
+  .palette-card .pdesc{ color:var(--dim); font-size:11.5px; margin:0 0 12px 0; line-height:1.5; }
+  .role-row{ display:flex; align-items:center; gap:8px; font-size:11px; padding:3px 0; }
+  .role-row .swatch{ width:16px; height:16px; border:1px solid var(--border-soft); flex-shrink:0; }
+  .role-row .rname{ color:var(--dim); width:110px; flex-shrink:0; }
+  .role-row .rhex{ color:var(--text); }
+  .accent-row{ display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
+  .accent-chip{ display:flex; align-items:center; gap:5px; font-size:10px; color:var(--dim); border:1px solid var(--border-soft); padding:3px 6px; }
+  .accent-chip .dot{ width:9px; height:9px; }
+
+  .overlay{ position:fixed; inset:0; background:rgba(5,6,7,0.82); display:none; align-items:center; justify-content:center; padding:24px; z-index:50; }
+  .overlay.open{display:flex;}
+
+  .modal{ background:var(--panel); border:1px solid var(--dot-color, var(--border)); max-width:720px; width:100%; max-height:88vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+  .modal-bar{ display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--border); background:var(--panel-2); position:sticky; top:0; }
+  .modal-bar .id-tag{ font-size:11px; color:var(--dot-color, var(--accent)); border:1px solid var(--dot-color, var(--border)); padding:2px 7px; }
+  .modal-bar .title{font-size:13px; font-weight:600; flex:1;}
+  .modal-bar .close-btn{ background:none; border:1px solid var(--border); color:var(--dim); font-family:inherit; font-size:11px; padding:4px 9px; cursor:pointer; }
+  .modal-bar .close-btn:hover{color:var(--text); border-color:var(--dim);}
+
+  .modal-body{padding:18px 20px 22px;}
+  .modal-ascii-wrap{position:relative;}
+  .modal-ascii{
+    margin:0 0 18px 0; padding:16px; background:var(--panel-2); border:1px solid var(--border-soft);
+    font-size:12.5px; line-height:1.4; white-space:pre; overflow-x:auto; color:var(--ascii-color, var(--text));
+  }
+  .copy-btn{ position:absolute; top:10px; right:10px; background:var(--panel); border:1px solid var(--border); color:var(--dim); font-family:inherit; font-size:10px; padding:4px 8px; cursor:pointer; }
+  .copy-btn:hover{color:var(--text); border-color:var(--dim);}
+
+  .notes{display:flex; flex-direction:column; gap:10px;}
+  .note-row{display:flex; gap:12px; font-size:12px;}
+  .note-row .label{ color:var(--dot-color, var(--dim)); width:76px; flex-shrink:0; text-transform:uppercase; font-size:10px; letter-spacing:0.06em; padding-top:2px; }
+  .note-row .val{color:var(--text); line-height:1.6;}
+
+  .app-type-line{ color:var(--dim); font-size:11px; margin:-4px 0 16px 0; }
+
+  footer{ padding:26px 28px 40px; color:var(--dimmer); font-size:11px; border-top:1px solid var(--border-soft); }
+  footer code{color:var(--dim);}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><span class="glyph">▸</span><h1>TUI Codex</h1></div>
+    <p class="brand-sub">ascii/unicode designs for cli apps</p>
+
+    <input type="text" class="search" id="search" placeholder="search title, app type, notes...">
+
+    <p class="nav-label">Categories</p>
+    <ul class="cat-list" id="catList"></ul>
+
+    <button class="palette-btn" id="paletteBtn">
+      <span class="dots"><span style="background:#ff2fb0"></span><span style="background:#00e5ff"></span><span style="background:#ffb000"></span></span>
+      Color palettes
+    </button>
+
+    <div class="meta-block">
+      <p><b id="totalCount">—</b> designs · <b id="catCount">—</b> categories · <b id="paletteCount">—</b> palettes</p>
+      <p>Data-driven from single <code>DESIGNS</code>/<code>PALETTES</code> arrays in this file — append an object to grow the codex. Every ascii block here is built by padding to one measured width constant per row — see the note in the paired <code>.md</code> file before adding your own, or borders will tear.</p>
+    </div>
+  </aside>
+
+  <main>
+    <div class="top-row">
+      <div>
+        <h2 id="viewTitle">All designs</h2>
+        <p class="cat-desc" id="viewDesc">Every entry in the codex, across all categories.</p>
+      </div>
+      <span class="result-count" id="resultCount"></span>
+    </div>
+
+    <div class="filter-row" id="filterRow"></div>
+
+    <div class="grid" id="grid" style="display:none;"></div>
+    <div class="palette-grid" id="paletteGrid" style="display:none;"></div>
+    <div class="empty" id="emptyState" style="display:none;">no designs match that search</div>
+  </main>
+</div>
+
+<footer>TUI Design Codex — a living reference. Add entries to the <code>DESIGNS</code> array below as new designs are built; borders are only as tear-free as the padding math you build them with.</footer>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+// -----------------------------------------------------------------------
+// CATEGORY DEFINITIONS
+// -----------------------------------------------------------------------
+const CATEGORIES = [
+  { code:"plain", label:"Plain", color:"#9aa0a6", desc:"ASCII-only, zero dependencies, works on any terminal." },
+  { code:"minimal", label:"Minimal", color:"#e6e6e6", desc:"Thin rules, huge whitespace, one restrained accent." },
+  { code:"dev", label:"Dev", color:"#4fc3f7", desc:"Dense, tabbed, status-badge driven — a tool for tools." },
+  { code:"hacker", label:"Hacker", color:"#39ff14", desc:"Green/amber-on-black, raw streams, all-caps." },
+  { code:"elegant", label:"Elegant", color:"#c9a876", desc:"Rounded corners, soft spacing, muted accents." },
+  { code:"retro", label:"Retro / CRT", color:"#ffb000", desc:"Double-line borders, BBS / phosphor energy." },
+  { code:"brutalist", label:"Brutalist", color:"#ff3b3b", desc:"Solid block glyphs, thick borders, no mercy." },
+  { code:"dashboard", label:"Dashboard", color:"#7c8cff", desc:"Multi-panel splits, sparklines, gauges." },
+  { code:"neon", label:"Neon / Electric", color:"#ff2fb0", desc:"Saturated multi-hue, glow-friendly, high energy." }
+];
+
+// -----------------------------------------------------------------------
+// COLOR PALETTES — reusable across any category above
+// -----------------------------------------------------------------------
+const PALETTES = [
+  { name:"Vibrant", desc:"Punchy, saturated multi-hue — playful dashboards and game-like TUIs.", bg:"#0d0d12", panel:"#17171e", border:"#2a2a35", text:"#f1f1f6", dim:"#8a8a9a", accents:[["magenta","#ff2fb0"],["cyan","#21e6ff"],["yellow","#ffe83d"],["green","#3dff7a"]] },
+  { name:"Electric", desc:"Narrow-hue neon voltage — glow/shadow friendly, reads as \"always on\".", bg:"#06060a", panel:"#0e0e16", border:"#20202e", text:"#eaf6ff", dim:"#5c6b7a", accents:[["electric blue","#00e5ff"],["electric purple","#b026ff"],["hot pink","#ff006e"]] },
+  { name:"Simple / Mono", desc:"Grayscale only, one optional accent — the safest palette for any terminal.", bg:"#0e0e10", panel:"#151517", border:"#2b2b2e", text:"#e4e4e4", dim:"#6b6b6b", accents:[["accent (optional)","#ffffff"]] },
+  { name:"Phosphor Green", desc:"Classic single-color CRT green — the Hacker category default.", bg:"#080a08", panel:"#0c0f0c", border:"#1a2a1a", text:"#39ff14", dim:"#1f7a0e", accents:[["alert red","#ff3b3b"]] },
+  { name:"Amber CRT", desc:"Warm phosphor amber — the Retro/BBS category default.", bg:"#0a0700", panel:"#120d00", border:"#3a2a00", text:"#ffb000", dim:"#8a6000", accents:[["highlight","#ffd766"]] },
+  { name:"Brass / Elegant", desc:"Warm, muted, low-saturation — the Elegant category default.", bg:"#111214", panel:"#17181c", border:"#2a2c30", text:"#d7dce1", dim:"#6d7680", accents:[["brass","#c9a876"],["soft amber","#e8b968"]] },
+  { name:"Dev Blue", desc:"Cool, high-legibility — the Dev category default; pairs with [OK]/[WARN]/[ERR].", bg:"#0c0d10", panel:"#131419", border:"#22252c", text:"#d7dce1", dim:"#6d7680", accents:[["info blue","#4fc3f7"],["ok green","#3ddc84"],["warn amber","#f5c451"],["err red","#ff5c5c"]] },
+  { name:"Alert / Brutalist", desc:"Maximum contrast, inverted-friendly — the Brutalist category default.", bg:"#000000", panel:"#0a0a0a", border:"#ffffff", text:"#ffffff", dim:"#9a9a9a", accents:[["alert red","#ff3b3b"]] }
+];
+
+// -----------------------------------------------------------------------
+// DESIGNS — append new entries here to grow the codex.
+// ascii: keep every border-glyph line at one shared width (see .md file's
+// "Rendering notes" section). id: CAT-NN, permanent once assigned.
+// border: 'full' | 'partial' | 'none'
+// -----------------------------------------------------------------------
+const DESIGNS = [
+{ id:"PLN-01", category:"plain", title:"Task List Menu", appType:"Todo / task manager", border:"full", ascii:"+--------------------------------------------------+\n| TASKS                            [3 pending]     |\n+--------------------------------------------------+\n| [ ] Write quarterly report         due mon       |\n| [x] Review PR #482                    closed     |\n| [ ] Update changelog                    due wed  |\n| [ ] Fix build on aarch64                   -     |\n+--------------------------------------------------+\n| a:add  d:done  x:delete  q:quit                  |\n+--------------------------------------------------+",
+  layout:"Single fixed-width panel, header/body/footer split by full-width rules.", colors:"None required; if available, reserve one color for the [x] done state only.", useCase:"Task runners, checklist tools, anything that must degrade gracefully with no color/Unicode support." },
+{ id:"PLN-02", category:"plain", title:"System Status Report", appType:"Status / healthcheck", border:"full", ascii:"+==================================================+\n|  SYSTEM STATUS                       2026-08-26  |\n+==================================================+\n|  CPU      : 12%  ok                              |\n|  MEMORY   : 3.2G / 16G  ok                       |\n|  DISK     : 210G / 500G  ok                      |\n|  NETWORK  : up  12ms                             |\n+--------------------------------------------------+\n|  SERVICES                                        |\n|    nginx        running                          |\n|    postgres     running                          |\n|    redis        stopped   <- check               |\n+==================================================+",
+  layout:"Double-rule (=) for section breaks, single-rule (-) for subsections, two-column key/value alignment.", colors:"None needed; the <- annotation carries the warning instead of color.", useCase:"Healthcheck CLIs, doctor commands, CI summary output piped to a log file with no TTY." },
+{ id:"PLN-03", category:"plain", title:"Simple File Browser", appType:"File manager", border:"full", ascii:"+---------------------------+--------------------+\n| /home/user/projects       | preview            |\n+---------------------------+--------------------+\n| ..                        |                    |\n| > agentworktree/          | select a file to   |\n|   dcp/                    | preview contents   |\n|   drift/                  |                    |\n|   README.md               |                    |\n|   Makefile                |                    |\n+---------------------------+--------------------+\n| j/k move  enter open  q quit                   |\n+------------------------------------------------+",
+  layout:"Two fixed columns (~57/43). \">\" marks selection instead of inverse video. Every rule — including the footer divider — is computed from the same total-width constant, which is the fix for the classic mismatched-bottom-border bug.", colors:"None; selection is marker-based so it works in monochrome.", useCase:"Minimal file pickers embedded in larger tools — commit hooks, install wizards." },
+{ id:"PLN-04", category:"plain", title:"Simple Invoice Table", appType:"Table / record viewer", border:"full", ascii:"+====+======================+=========+\n|  INVOICE #0042                      |\n+====+======================+=========+\n| QTY| ITEM                 | PRICE   |\n+----+----------------------+---------+\n| 2  | PSAnsi license       | $0.00   |\n| 1  | Drift support        | $40.00  |\n| 3  | RavenUI theme        | $15.00  |\n+----+----------------------+---------+\n|  TOTAL                     $85.00   |\n+====+======================+=========+",
+  layout:"ASCII column grid with a full-width header/total row spanning all columns — a common source of tear if the span width isn't derived from the sum of the column widths plus separators.", colors:"None; pure ASCII works over any connection.", useCase:"Line-item tables, billing/report CLIs, anything that must render identically on a dumb terminal." },
+{ id:"MIN-01", category:"minimal", title:"Focus Timer", appType:"Pomodoro / timer", border:"none", ascii:"\n                    25:00\n\n                  ● ● ● ○ ○\n\n            [ pause ]    [ skip ]\n",
+  layout:"No border at all — content is centered in the terminal with generous vertical padding.", colors:"Filled dots use a single accent (soft amber); everything else is default foreground.", useCase:"Single-purpose utilities where the terminal window itself is the whole app — timers, counters, single-metric watchers." },
+{ id:"MIN-02", category:"minimal", title:"Single Note Editor", appType:"Scratchpad / notes", border:"full", ascii:"┌────────────────────────────────────────┐\n│ untitled                               │\n│                                        │\n│ Meeting notes go here.                 │\n│                                        │\n│                                        │\n│                                        │\n└────────────────────────────────────────┘\n  ⌘s save   esc close",
+  layout:"One thin-rule box computed from a single width constant, title line separated only by a blank row, keybinds live outside the box (not part of the bordered region).", colors:"Border in dim gray, text full-contrast, no accent color at all.", useCase:"Scratch buffers, commit-message editors, quick-capture tools." },
+{ id:"MIN-03", category:"minimal", title:"Command Prompt (empty state)", appType:"REPL / shell", border:"none", ascii:"\n  ~/projects/drift\n\n  ›\n",
+  layout:"No box, just an indented path and a single prompt glyph (›) instead of $.", colors:"Path dimmed, prompt glyph in accent color, cursor is the only bright element.", useCase:"The empty/idle state of any REPL — proof a minimal design still needs to define what \"nothing is happening\" looks like." },
+{ id:"MIN-04", category:"minimal", title:"System Tray Panel", appType:"Status summary", border:"full", ascii:"┌──────────────────────────────────┐\n│                                  │\n│  battery      87%                │\n│  wifi         connected          │\n│  volume       muted              │\n│                                  │\n└──────────────────────────────────┘",
+  layout:"A fully-enclosed thin-rule box — the category's full-border reference point, proving minimal doesn't require borderless.", colors:"Border in dim gray; a single accent marks the one value that needs attention, everything else stays neutral.", useCase:"Compact status popovers, tray-style summaries, a persistent corner widget in a larger layout." },
+{ id:"DEV-01", category:"dev", title:"Git Log / Branch Graph", appType:"Git client", border:"full", ascii:"┌─ log ─┬─ branches ─┬─ stash ──────────────────────┐\n│ * a1c9f2  feat: quad-hybrid render pipeline       │\n│ * 88de11  fix: memory leak in tag resolver        │\n│ |\\                                                │\n│ | * 7cb410  wip: renderer prototype               │\n│ |/                                                │\n│ * 004ab2  chore: bump deps                        │\n├───────────────────────────────────────────────────┤\n│ HEAD -> main   origin/main   3 ahead              │\n└───────────────────────────────────────────────────┘",
+  layout:"Tabbed top border built from labeled segments joined at exact character offsets, graph column fixed-width on the left, commit message flows right.", colors:"Graph lines in muted blue, hashes in dim gray, \"HEAD ->\" in accent bold.", useCase:"Git TUIs (lazygit-style), branch visualizers, PR review tools." },
+{ id:"DEV-02", category:"dev", title:"Build & Test Runner Output", appType:"Test runner", border:"full", ascii:"┌ pester ▸ AgentWorktree.Tests.ps1 ─────────────────┐\n│ [OK]   New-Worktree creates isolated branch       │\n│ [OK]   Remove-Worktree cleans up refs             │\n│ [WARN] Sync-Worktree skipped (no remote)          │\n│ [ERR]  Merge-Worktree: conflict in tests/fixture  │\n├───────────────────────────────────────────────────┤\n│ 24 passed   1 warned   1 failed   ·   2.4s        │\n└───────────────────────────────────────────────────┘",
+  layout:"Breadcrumb title (suite ▸ file) embedded directly in the border, left-aligned status tags at fixed width so messages align.", colors:"[OK] green, [WARN] amber, [ERR] red — the phellams status-tag convention.", useCase:"Pester/pytest/jest-style runners, CI log viewers, lint output." },
+{ id:"DEV-03", category:"dev", title:"API Request Inspector", appType:"HTTP client / debugger", border:"full", ascii:"┌ request ──────────────────────────────────────────┐\n│ POST /api/v4/projects/482/pipelines               │\n│ status  200                          142ms        │\n├─ headers ─────────────────────────────────────────┤\n│ content-type: application/json                    │\n│ x-ratelimit-remaining: 1998                       │\n├─ body ────────────────────────────────────────────┤\n│ { \"id\": 8841, \"status\": \"pending\" }               │\n└───────────────────────────────────────────────────┘",
+  layout:"Stacked sections with inline mini-headers rather than full-width dividers — saves vertical space while every row still resolves to the same total width.", colors:"Method (POST) in accent, 2xx status in green, JSON keys dimmed vs. string values full-contrast.", useCase:"HTTPie-style TUIs, GitLab/GitHub API wrappers, webhook debuggers." },
+{ id:"DEV-04", category:"dev", title:"Dependency Tree", appType:"Package manager / resolver", border:"full", ascii:"┌────────────────────────────────────────────┐\n│ deps ▸ phellams-automator                  │\n├────────────────────────────────────────────┤\n│ PH.ErrorReporting          ^2.1.0          │\n│  └─ PSAnsi                  ^1.4.2         │\n│ DCP                        ^0.9.0          │\n│  └─ PSAnsi                  ^1.4.2  dup    │\n├────────────────────────────────────────────┤\n│ 4 packages, 1 duplicate resolved           │\n└────────────────────────────────────────────┘",
+  layout:"Indented tree rows inside a fully bordered panel, with a duplicate-resolution warning called out inline rather than in a separate color-only signal.", colors:"Package names full-contrast, version ranges dimmed, \"dup\" flagged in amber.", useCase:"npm/nuget/cargo-style dependency inspectors, lockfile explainers." },
+{ id:"HAK-01", category:"hacker", title:"Network Scanner", appType:"Port / network scanner", border:"partial", ascii:"[SCAN] target 10.0.0.0/24 ................ 62%\n------------------------------------------------\n10.0.0.1    up     22/tcp   ssh    OpenSSH 9.3\n10.0.0.14   up     80/tcp   http   nginx\n10.0.0.14   up     443/tcp  https  nginx\n10.0.0.22   filtered\n10.0.0.31   up     3306/tcp mysql\n------------------------------------------------\n[####################............] 41/64 hosts",
+  layout:"Left-aligned data columns under a plain rule (top/bottom only, no side borders) with an ASCII progress bar rather than a Unicode block gauge — reads as a raw tool, not a polished dashboard.", colors:"Phosphor green on near-black; filtered/closed rows dim to gray.", useCase:"nmap-style scanners, recon tools, pentest utilities." },
+{ id:"HAK-02", category:"hacker", title:"System Intrusion Monitor", appType:"Security monitor", border:"partial", ascii:"█▓▒░ INTRUSION MONITOR ░▒▓█\n────────────────────────────\n> AUTH FAIL   root@10.4.2.9   x14   [BLOCKED]\n> AUTH FAIL   admin@10.4.2.9  x3\n> PORT SCAN   10.4.2.9 -> 10.4.2.0/24\n> RULE HIT    fw::deny_burst applied\n────────────────────────────\nTHREAT LEVEL: [■■■■■■□□□□] ELEVATED",
+  layout:"The █▓▒░ fade is used once, purely as a title flourish — do not repeat it elsewhere on the same screen. Rules above/below only, no side borders.", colors:"Base green; [BLOCKED] and ELEVATED escalate to red as the only warm color on screen.", useCase:"fail2ban-style dashboards, SOC/NOC alert feeds, IDS front-ends." },
+{ id:"HAK-03", category:"hacker", title:"Log Tail / Live Stream", appType:"Log tail", border:"none", ascii:"root@node-07:~$ tail -f /var/log/syslog\nAug26 03:14:07 kernel: eth0 link up\nAug26 03:14:09 sshd: session opened uid=0\nAug26 03:14:12 cron: (root) CMD (backup.sh)\nAug26 03:14:44 sshd: session closed\n_",
+  layout:"No chrome at all — meant to look exactly like a real terminal, prompt included, with a blinking block cursor on the last line.", colors:"Timestamps dimmed, process names in accent, rest in default green/white.", useCase:"tail -f, journalctl streams, real-time log viewers." },
+{ id:"HAK-04", category:"hacker", title:"Password Cracking Progress", appType:"Security tool / brute-force UI", border:"full", ascii:"+----------------------------------------+\n| root@target : cracking shadow.bak      |\n|                                        |\n| trying: correcthorsebatterystaple      |\n| rate: 4.2M/s     tried: 8,204,112      |\n| [############............] 44%         |\n+----------------------------------------+",
+  layout:"The category's full-border reference point: same phosphor-green register as HAK-01–03, but fully enclosed for contexts that need a defined panel edge (embedded in a larger multi-pane layout, for example).", colors:"Phosphor green text, ASCII bar fill in the same green, border in dim green rather than full brightness.", useCase:"Brute-force/benchmark tools, any long-running rate-limited operation that needs a persistent frame." },
+{ id:"ELG-01", category:"elegant", title:"Project Dashboard Card", appType:"Project overview", border:"full", ascii:"╭───────────────────────────────────────╮\n│  Drift                                │\n│  PowerShell web framework             │\n│                                       │\n│  progress   ●●●●●●●○○○   72%          │\n│  status     active                    │\n│  updated    2 days ago                │\n│                                       │\n╰───────────────────────────────────────╯",
+  layout:"Rounded box, label/value pairs left-aligned with a fixed label column, one blank line above and below the metrics block.", colors:"Border in soft gray, filled progress dots in muted brass, empty dots in low-contrast gray.", useCase:"Project/repo overview cards, the \"home screen\" of a multi-project TUI." },
+{ id:"ELG-02", category:"elegant", title:"Settings Panel", appType:"Preferences / config", border:"full", ascii:"╭─ preferences ──────────────────────────╮\n│                                        │\n│  theme          ›  midnight            │\n│  font           ›  IBM Plex Mono       │\n│  accent         ›  brass               │\n│  telemetry      ›  off                 │\n│                                        │\n╰────────────────────────────────────────╯",
+  layout:"Section title embedded in the top border at an exact offset, \"›\" as the value chevron instead of a colon — reads softer.", colors:"Labels dimmed, values full-contrast, chevron in accent.", useCase:"Any settings/config screen where the tone should feel considered rather than utilitarian." },
+{ id:"ELG-03", category:"elegant", title:"Weekly Journal", appType:"Log / journal", border:"full", ascii:"╭────────────────────────────────────────╮\n│  week of aug 24                        │\n│  ────────────────────────────────────  │\n│  mon   shipped psansi v2               │\n│  tue   reviewed ravenui palette        │\n│  wed   —                               │\n│                                        │\n╰────────────────────────────────────────╯",
+  layout:"Thin internal rule under the title only, not between every row. Empty days shown as an em-dash rather than left blank.", colors:"Day labels dimmed and right-padded to align, entries full-contrast.", useCase:"Devlogs, changelogs-as-you-go, standup-note tools." },
+{ id:"ELG-04", category:"elegant", title:"CI Status Summary", appType:"Build status widget", border:"full", ascii:"╭────────────────────────────────────╮\n│                                    │\n│  build      ● passing              │\n│  coverage   ●●●●●●●●○○  81%        │\n│  version    2.3.0                  │\n│                                    │\n╰────────────────────────────────────╯",
+  layout:"A small, dense rounded card — proof the elegant register scales down to a compact status widget, not just full dashboards.", colors:"Passing status in a soft green dot, coverage bar in brass, version number dimmed.", useCase:"Compact CI badges inside a larger TUI, PR-status widgets, README-adjacent terminal badges." },
+{ id:"RET-01", category:"retro", title:"BBS Main Menu", appType:"Main menu / launcher", border:"full", ascii:"╔══════════════════════════════════════════╗\n║          W E L C O M E   B B S           ║\n╠══════════════════════════════════════════╣\n║  [1] Message Boards                      ║\n║  [2] File Library                        ║\n║  [3] Door Games                          ║\n║  [4] Who's Online                        ║\n║  [5] Logoff                              ║\n╠══════════════════════════════════════════╣\n║  Enter selection:  _                     ║\n╚══════════════════════════════════════════╝",
+  layout:"Double-line box throughout, letter-spaced title, numbered options with no icons — text does all the work.", colors:"Amber or classic green on black; no secondary accent, everything is the one phosphor color.", useCase:"Launcher menus, main-menu screens for multi-mode CLIs, nostalgia-driven dev tools." },
+{ id:"RET-02", category:"retro", title:"Retro File Manager", appType:"Dual-pane file manager", border:"full", ascii:"╔═ LEFT ══════════════╦═ RIGHT ═════════════╗\n║ C:\\DOS\\             ║ A:\\BACKUP\\          ║\n║  COMMAND.COM   47K  ║  README.TXT     2K  ║\n║  AUTOEXEC.BAT   1K  ║  DATA.ZIP     118K  ║\n╠═════════════════════╩═════════════════════╣\n║ F5 Copy  F6 Move  F8 Delete  F10 Quit     ║\n╚═══════════════════════════════════════════╝",
+  layout:"Literal Norton-Commander dual pane with a T-junction where panes meet the footer — the exact character offset where columns meet the divider is computed, not eyeballed, so the joint never tears.", colors:"Amber or cyan on black, function-key footer in inverse video.", useCase:"Dual-pane file managers (a direct homage), disk utilities." },
+{ id:"RET-03", category:"retro", title:"ANSI Splash / Boot Screen", appType:"Splash / boot screen", border:"full", ascii:"╔══════════════════════════════════════════╗\n║                                          ║\n║     ▄▄▄▄▄  ▄▄▄▄▄  ▄  ▄  ▄▄▄▄▄            ║\n║     █   █  █      █  █  █                ║\n║     █▄▄▄▀  █▄▄▄▄  █▄▄█  █▄▄▄▄            ║\n║                                          ║\n║        press any key to continue         ║\n╚══════════════════════════════════════════╝",
+  layout:"The block-letter logo is the only content — everything else is empty space inside a double-line frame.", colors:"Logo in full accent color, \"press any key\" dimmed and optionally blinking.", useCase:"App launch splash screens, --version/banner output, installer welcome screens." },
+{ id:"RET-04", category:"retro", title:"Loading Screen", appType:"Progress / loading screen", border:"full", ascii:"╔════════════════════════════════════════╗\n║                LOADING                 ║\n║                                        ║\n║  [██████████████████░░░░░░░░░░] 64%    ║\n║                                        ║\n║             please wait...             ║\n╚════════════════════════════════════════╝",
+  layout:"Centered label, centered ASCII block-and-shade progress bar, centered footer line — every centered string is padded from its own measured length so the visual center never drifts as the percentage changes.", colors:"Amber block fill, unfilled portion in a dim shade character rather than blank space so the bar's total length reads as fixed.", useCase:"Installer/loading screens, any long-running step that wants retro ceremony instead of a bare percentage." },
+{ id:"BRU-01", category:"brutalist", title:"Raw Metrics Grid", appType:"System metrics", border:"full", ascii:"██████████████████████████████████████████\n█ CPU  87% █ MEM  61% █ DISK 94% █ NET 3%█\n██████████████████████████████████████████\n█ LOAD 4.82   1.90   0.77                █\n██████████████████████████████████████████",
+  layout:"Full block borders instead of line-drawing characters; cells separated by single block characters rather than whitespace, column widths summed exactly to the frame width.", colors:"Background stays black, block borders in full white or full accent — no gray, no dimming.", useCase:"System-critical monitors meant to be glanced at from across a room — NOC video walls, kiosk displays." },
+{ id:"BRU-02", category:"brutalist", title:"Process Table", appType:"Process monitor", border:"full", ascii:"█████████████████████████████████████████████\n█ PID   █ NAME              █ CPU    █ MEM  █\n█████████████████████████████████████████████\n█ 1021  █ nginx             █ 2%     █ 44M  █\n█ 1188  █ postgres          █ 9%     █ 412M █\n█ 2044  █ node              █ 61%    █ 180M █\n█████████████████████████████████████████████",
+  layout:"Column separators are block glyphs, not spaces — the grid is aggressively visible; every row's cell widths are computed from the same tuple so no column ever drifts.", colors:"High CPU/MEM values can invert to a solid red block background rather than colored text, staying in the block language.", useCase:"top/htop alternatives that want to look intentionally raw rather than polished." },
+{ id:"BRU-03", category:"brutalist", title:"Alert Wall", appType:"Alert / paging screen", border:"full", ascii:"██████████████████████████████████████████\n█ !! DISK 94% !! ACT NOW !! DISK 94% !!  █\n██████████████████████████████████████████\n█ !! LOAD HIGH !! ACT NOW !! LOAD HIGH !!█\n██████████████████████████████████████████",
+  layout:"The message repeats within its own row — redundancy as a design choice, legible even glanced at mid-scroll.", colors:"Solid red or amber block background, black text — the inverse of every other design in this codex, on purpose.", useCase:"Paging/incident screens meant to be unmissable, never a default idle state." },
+{ id:"BRU-04", category:"brutalist", title:"Confirm / Kill Dialog", appType:"Confirmation modal", border:"full", ascii:"████████████████████████████████████\n█ TERMINATE PROCESS 2044?          █\n████████████████████████████████████\n█  [Y] confirm    [N] cancel       █\n████████████████████████████████████",
+  layout:"A small fully block-bordered modal — proof the brutalist register works for a two-line confirmation, not only full-screen monitors.", colors:"Same solid-block frame as the rest of the category; no separate \"modal\" styling language introduced.", useCase:"Destructive-action confirmations (kill process, delete volume, force push) where the visual weight should match the stakes." },
+{ id:"DSH-01", category:"dashboard", title:"Ops Dashboard", appType:"Ops / metrics dashboard", border:"full", ascii:"┌─ requests/s ────────┬─ errors ──┬─ latency ───┐\n│ ▂▃▅▇▆▄▃▂▃▅▇█▆▄▃▂▃   │ 0.4%      │ 84ms p50    │\n├─────────────────────┴───────────┴─────────────┤\n│ nodes    ●●●●●●●○○○  7/10 healthy             │\n│ queue    142 jobs                             │\n│ deploys  3 today   last: 14:02 main@a1c9f2    │\n└───────────────────────────────────────────────┘",
+  layout:"Three-up sparkline row on top with unequal widths — the sparkline panel is widest since it carries the most information — full-width status rows below, joined at a divider computed from the same three widths.", colors:"Sparkline in accent blue, error % in amber/red by threshold, node dots green/gray for healthy/unhealthy.", useCase:"The \"home screen\" of an ops TUI — k9s/lazydocker-style landing views." },
+{ id:"DSH-02", category:"dashboard", title:"Kanban Board", appType:"Task board", border:"full", ascii:"┌─ TODO ───────┬─ DOING ──────┬─ DONE ───────┐\n│ fix ci flake │ tag resolver │ psansi v2    │\n│ write docs   │ brand kit    │ hotfix #482  │\n│              │              │ deps bump    │\n└──────────────┴──────────────┴──────────────┘",
+  layout:"Three equal-width columns; cards are just text rows with no per-card border to keep the board scannable at a glance.", colors:"Column headers in distinct muted accents so the eye tracks state without reading the header text.", useCase:"Terminal kanban tools, sprint boards, PR-review-queue views." },
+{ id:"DSH-03", category:"dashboard", title:"Server Fleet Monitor", appType:"Fleet / cluster monitor", border:"full", ascii:"┌─ node-01 ─┬─ node-02 ─┬─ node-03 ─┬─ node-04 ─┐\n│ cpu ▓▓▓░░ │ cpu ▓▓▓▓▓ │ cpu ▓░░░░ │ cpu ▓▓░░░ │\n│ up  14d   │ up  2d    │ up  61d   │ up  9d    │\n│ ok        │ hot       │ ok        │ ok        │\n└───────────┴───────────┴───────────┴───────────┘",
+  layout:"N equal columns that scale horizontally with fleet size — reach for this pattern whenever the entity count is dynamic, not fixed; the join glyphs are generated per-column so adding a 5th node never desyncs the header.", colors:"Block-bar fills scale from green through amber to red by load; the one-word status line repeats the same signal in text for accessibility.", useCase:"Fleet dashboards, container/pod grids, CI runner fleets." },
+{ id:"DSH-04", category:"dashboard", title:"Single-Panel Throughput", appType:"Metrics widget", border:"full", ascii:"┌────────────────────────────────────────────┐\n│ THROUGHPUT                                 │\n│ ▂▃▅▇▆▄▃▂▃▅▇█▆▄▃▂▃▅▇▆▄▃▂  842 rps           │\n├────────────────────────────────────────────┤\n│ p50  84ms      p99  310ms      err 0.4%    │\n└────────────────────────────────────────────┘",
+  layout:"One fully bordered panel rather than a multi-column split — the category's full-border reference point for contexts where a single metric deserves the whole frame.", colors:"Sparkline in accent, the trailing summary number in full-contrast bold, secondary stats dimmed on the row below a divider.", useCase:"Embeddable single-metric widgets inside a larger dashboard grid, or a standalone `watch`-style tool." },
+{ id:"NEO-01", category:"neon", title:"Now Playing / Media Player", appType:"Music / media player", border:"full", ascii:"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n┃             ▸▸ NOW PLAYING             ┃\n┃                                        ┃\n┃  Midnight Circuit                      ┃\n┃  synthwave // 03:12                    ┃\n┃                                        ┃\n┃  [▬▬▬▬▬▬▬▬•──────] 01:24 / 03:12       ┃\n┃                                        ┃\n┃               ⏮   ▶   ⏭                ┃\n┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛",
+  layout:"Heavy-line (bold) box drawing for extra visual weight, centered title and centered transport controls, progress bar built from filled/unfilled glyphs of guaranteed-equal total length.", colors:"Title in electric blue, progress fill in hot pink, transport glyphs in electric purple — three accents used deliberately, not randomly.", useCase:"Media players, audio visualizers, anything where the frame itself should feel like it's \"on\"." },
+{ id:"NEO-02", category:"neon", title:"Game HUD", appType:"Game status overlay", border:"full", ascii:"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n┃ HP  ♥♥♥♥♥♥♥♥♡♡   LVL 14                  ┃\n┃ MP  ♦♦♦♦♦♦♦♦♦♦   XP  8,412               ┃\n┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n┃                                          ┃\n┃ [!] boss encounter in 20m                ┃\n┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛",
+  layout:"Two stat rows (HP/MP) separated from an alert row by a divider; heart/diamond glyphs are counted like any other character so the bar never desyncs from its label.", colors:"HP in hot pink/red, MP in electric blue, the boss-alert row in yellow as the one warning color in an otherwise cool palette.", useCase:"Terminal game HUDs, roguelike status bars, health/resource overlays." },
+{ id:"NEO-03", category:"neon", title:"Chat / IRC Client", appType:"Chat client", border:"full", ascii:"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n┃ #general                               ┃\n┃                                        ┃\n┃ kai      shipped the neon variant      ┃\n┃ row      that gradient is unreal       ┃\n┃ kai      css or ansi 256?              ┃\n┃ row      ansi 256, no gradients irl    ┃\n┃                                        ┃\n┃ › type a message_                      ┃\n┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛",
+  layout:"Channel name as a plain header row, message rows left-aligned with a fixed username column, live input row at the bottom with a block cursor.", colors:"Usernames in alternating accent colors (cycle electric blue / hot pink) so speakers are distinguishable without re-reading the name.", useCase:"IRC/Matrix/Slack-style terminal chat clients, pairing tools with a chat sidebar." },
+{ id:"NEO-04", category:"neon", title:"Upload / Transfer Progress", appType:"File transfer widget", border:"full", ascii:"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n┃            ELECTRIC UPLOAD             ┃\n┃                                        ┃\n┃ [██████████████░░░░░░] 70%             ┃\n┃ 14.2MB / 20.4MB    3.1 MB/s            ┃\n┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛",
+  layout:"Centered title, then a left-aligned progress bar and stat line — deliberately mixing centered and left-aligned content inside one frame to show the technique still holds as long as every row is padded to the same width.", colors:"Bar fill in electric blue transitioning conceptually toward green near completion; speed/size line dimmed.", useCase:"Upload/download progress in CLI tools, sync clients, deploy-progress widgets." }
+];
+
+// -----------------------------------------------------------------------
+// RENDER
+// -----------------------------------------------------------------------
+const catByCode = Object.fromEntries(CATEGORIES.map(c => [c.code, c]));
+let activeCat = 'all';
+let query = '';
+let borderFilter = 'all';
+let view = 'designs'; // 'designs' | 'palettes'
+
+function catColorVar(code){ return catByCode[code] ? catByCode[code].color : 'var(--accent)'; }
+
+document.getElementById('totalCount').textContent = DESIGNS.length;
+document.getElementById('catCount').textContent = CATEGORIES.length;
+document.getElementById('paletteCount').textContent = PALETTES.length;
+
+function renderSidebar(){
+  const list = document.getElementById('catList');
+  const counts = {};
+  DESIGNS.forEach(d => counts[d.category] = (counts[d.category]||0)+1);
+
+  let html = `<li class="cat-item ${activeCat==='all' && view==='designs'?'active':''}" data-cat="all" style="--dot-color:var(--accent)">
+      <span class="name"><span class="swatch" style="background:var(--accent)"></span>All</span>
+      <span class="count">${DESIGNS.length}</span>
+    </li>`;
+
+  CATEGORIES.forEach(c => {
+    html += `<li class="cat-item ${activeCat===c.code && view==='designs'?'active':''}" data-cat="${c.code}" style="--dot-color:${c.color}">
+        <span class="name"><span class="swatch" style="background:${c.color}"></span>${c.label}</span>
+        <span class="count">${counts[c.code]||0}</span>
+      </li>`;
+  });
+
+  list.innerHTML = html;
+  list.querySelectorAll('.cat-item').forEach(el => {
+    el.addEventListener('click', () => {
+      activeCat = el.getAttribute('data-cat');
+      view = 'designs';
+      renderAll();
+    });
+  });
+
+  document.getElementById('paletteBtn').classList.toggle('active', view==='palettes');
+}
+
+function matchesQuery(d){
+  if(!query) return true;
+  const q = query.toLowerCase();
+  return d.title.toLowerCase().includes(q)
+    || d.appType.toLowerCase().includes(q)
+    || d.id.toLowerCase().includes(q)
+    || d.layout.toLowerCase().includes(q)
+    || d.useCase.toLowerCase().includes(q);
+}
+
+function renderFilterRow(){
+  const row = document.getElementById('filterRow');
+  if(view !== 'designs'){ row.style.display = 'none'; return; }
+  row.style.display = 'flex';
+  const opts = [
+    ['all','All borders'],
+    ['full','Full border'],
+    ['partial','Partial border'],
+    ['none','Borderless'],
+  ];
+  row.innerHTML = opts.map(([code,label]) =>
+    `<button class="filter-chip ${borderFilter===code?'active':''}" data-border="${code}">${label}</button>`
+  ).join('');
+  row.querySelectorAll('.filter-chip').forEach(el => {
+    el.addEventListener('click', () => {
+      borderFilter = el.getAttribute('data-border');
+      renderGrid();
+      renderFilterRow();
+    });
+  });
+}
+
+function escapeHtml(str){
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderGrid(){
+  document.getElementById('grid').style.display = 'grid';
+  document.getElementById('paletteGrid').style.display = 'none';
+
+  const grid = document.getElementById('grid');
+  const empty = document.getElementById('emptyState');
+  const viewTitle = document.getElementById('viewTitle');
+  const viewDesc = document.getElementById('viewDesc');
+  const resultCount = document.getElementById('resultCount');
+
+  if(activeCat === 'all'){
+    viewTitle.textContent = 'All designs';
+    viewDesc.textContent = 'Every entry in the codex, across all categories.';
+  } else {
+    const c = catByCode[activeCat];
+    viewTitle.innerHTML = `<span class="swatch" style="display:inline-block;width:8px;height:8px;background:${c.color}"></span>${c.label}`;
+    viewDesc.textContent = c.desc;
+  }
+
+  const items = DESIGNS.filter(d =>
+    (activeCat==='all' || d.category===activeCat)
+    && (borderFilter==='all' || d.border===borderFilter)
+    && matchesQuery(d)
+  );
+  resultCount.textContent = `${items.length} design${items.length===1?'':'s'}`;
+
+  if(items.length === 0){
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  grid.innerHTML = items.map(d => {
+    const color = catColorVar(d.category);
+    const borderLabel = d.border === 'full' ? 'full border' : d.border === 'partial' ? 'partial border' : 'borderless';
+    return `<div class="card" data-cat="${d.category}" data-id="${d.id}" style="--dot-color:${color}">
+        <div class="card-bar">
+          <span class="id-tag">${d.id}</span>
+          <span class="title">${d.title}</span>
+          <span class="cat-code">${d.category}</span>
+        </div>
+        <pre class="card-ascii">${escapeHtml(d.ascii)}</pre>
+        <div class="card-foot"><span>${d.appType}</span><span class="border-badge">${borderLabel}</span></div>
+      </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.card').forEach(el => {
+    el.addEventListener('click', () => openModal(el.getAttribute('data-id')));
+  });
+}
+
+function renderPalettes(){
+  document.getElementById('grid').style.display = 'none';
+  document.getElementById('paletteGrid').style.display = 'grid';
+  document.getElementById('emptyState').style.display = 'none';
+
+  document.getElementById('viewTitle').textContent = 'Color palettes';
+  document.getElementById('viewDesc').textContent = 'Named palettes you can apply to any category above — background, panel, border, text, and accent roles.';
+  document.getElementById('resultCount').textContent = `${PALETTES.length} palette${PALETTES.length===1?'':'s'}`;
+
+  const grid = document.getElementById('paletteGrid');
+  grid.innerHTML = PALETTES.map(p => `
+    <div class="palette-card">
+      <h3>${p.name}</h3>
+      <p class="pdesc">${p.desc}</p>
+      <div class="role-row"><span class="swatch" style="background:${p.bg}"></span><span class="rname">background</span><span class="rhex">${p.bg}</span></div>
+      <div class="role-row"><span class="swatch" style="background:${p.panel}"></span><span class="rname">panel</span><span class="rhex">${p.panel}</span></div>
+      <div class="role-row"><span class="swatch" style="background:${p.border}"></span><span class="rname">border</span><span class="rhex">${p.border}</span></div>
+      <div class="role-row"><span class="swatch" style="background:${p.text}"></span><span class="rname">text</span><span class="rhex">${p.text}</span></div>
+      <div class="role-row"><span class="swatch" style="background:${p.dim}"></span><span class="rname">dim text</span><span class="rhex">${p.dim}</span></div>
+      <div class="accent-row">
+        ${p.accents.map(([n,h]) => `<span class="accent-chip"><span class="dot" style="background:${h}"></span>${n} · ${h}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderAll(){
+  renderSidebar();
+  renderFilterRow();
+  if(view === 'palettes') renderPalettes(); else renderGrid();
+}
+
+function openModal(id){
+  const d = DESIGNS.find(x => x.id === id);
+  if(!d) return;
+  const color = catColorVar(d.category);
+  const borderLabel = d.border === 'full' ? 'full border' : d.border === 'partial' ? 'partial border' : 'borderless';
+  const modal = document.getElementById('modal');
+  modal.style.setProperty('--dot-color', color);
+  modal.innerHTML = `
+    <div class="modal-bar">
+      <span class="id-tag">${d.id}</span>
+      <span class="title">${d.title}</span>
+      <button class="close-btn" id="closeModal">esc close</button>
+    </div>
+    <div class="modal-body">
+      <p class="app-type-line">${d.appType} · ${catByCode[d.category].label} · ${borderLabel}</p>
+      <div class="modal-ascii-wrap">
+        <button class="copy-btn" id="copyBtn">copy</button>
+        <pre class="modal-ascii">${escapeHtml(d.ascii)}</pre>
+      </div>
+      <div class="notes">
+        <div class="note-row"><span class="label">Layout</span><span class="val">${d.layout}</span></div>
+        <div class="note-row"><span class="label">Colors</span><span class="val">${d.colors}</span></div>
+        <div class="note-row"><span class="label">Use case</span><span class="val">${d.useCase}</span></div>
+      </div>
+    </div>`;
+
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('closeModal').addEventListener('click', closeModal);
+  document.getElementById('copyBtn').addEventListener('click', () => {
+    navigator.clipboard.writeText(d.ascii).then(() => {
+      const btn = document.getElementById('copyBtn');
+      btn.textContent = 'copied';
+      setTimeout(() => btn.textContent = 'copy', 1200);
+    });
+  });
+}
+
+function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
+
+document.getElementById('overlay').addEventListener('click', (e) => { if(e.target.id === 'overlay') closeModal(); });
+document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeModal(); });
+document.getElementById('search').addEventListener('input', (e) => { query = e.target.value; renderGrid(); });
+document.getElementById('paletteBtn').addEventListener('click', () => { view = 'palettes'; renderAll(); });
+
+renderAll();
+</script>
+</body>
+</html>

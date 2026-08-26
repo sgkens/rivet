@@ -3,7 +3,7 @@
     Parses one Conventional Commit subject and body.
 .DESCRIPTION
     Returns a normalized type, exact scope, description, breaking-change state,
-    release category, and release-note sentence for all glmeta consumers.
+    release category, and release-note sentence for all rivet consumers.
 #>
 function ConvertFrom-ConventionalCommit {
     [CmdletBinding()]

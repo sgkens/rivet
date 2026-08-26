@@ -18,11 +18,11 @@ Generated from Git history.
 
 ## Summary
 
-<!-- glmeta:mr-changes:start -->
+<!-- rivet:mr-changes:start -->
 
 - Generated from non-merge commits in the selected range.
 
-<!-- glmeta:mr-changes:end -->
+<!-- rivet:mr-changes:end -->
 
 ## Compatibility
 

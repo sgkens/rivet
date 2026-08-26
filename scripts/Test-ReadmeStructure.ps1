@@ -1,7 +1,7 @@
 function Test-ReadmeStructure {
     <#
     .SYNOPSIS
-        Validates README headings against the repository glmeta contract.
+        Validates README headings against the repository rivet contract.
     .DESCRIPTION
         Parses Markdown ATX headings outside fenced code blocks, normalizes
         presentation markup, and reports every configured required heading.
@@ -15,7 +15,7 @@ function Test-ReadmeStructure {
 
     $readmePath = [System.IO.Path]::Combine([System.IO.Path]::GetFullPath($RepositoryRoot), 'README.md')
     if (-not [System.IO.File]::Exists($readmePath)) { throw "README not found: $readmePath" }
-    $config = Get-GlmetaConfiguration -ConfigPath $ConfigPath
+    $config = Get-RivetConfiguration -ConfigPath $ConfigPath
     $required = @($config.readme.requiredHeadings)
     if (-not $required.Count) { throw 'readme.requiredHeadings must contain at least one heading.' }
 

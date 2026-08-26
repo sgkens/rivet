@@ -1,4 +1,4 @@
-function Write-GlmetaVersionReport {
+function Write-RivetVersionReport {
     <#
     .SYNOPSIS
         Explains the repository's next version calculation.

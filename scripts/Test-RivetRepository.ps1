@@ -1,7 +1,7 @@
-function Test-GlmetaRepository {
+function Test-RivetRepository {
     <#
     .SYNOPSIS
-        Runs read-only glmeta configuration and repository readiness checks.
+        Runs read-only rivet configuration and repository readiness checks.
     #>
     [CmdletBinding()]
     param(
@@ -16,7 +16,7 @@ function Test-GlmetaRepository {
     Add-Check 'PowerShell' ($PSVersionTable.PSVersion.Major -ge 7) $PSVersionTable.PSVersion.ToString()
     $git = Get-Command git -ErrorAction SilentlyContinue
     Add-Check 'Git' ($null -ne $git) $(if ($git) { (& git --version) } else { 'not installed' })
-    try { $config = Get-GlmetaConfiguration -ConfigPath $ConfigPath; Add-Check 'Configuration' $true 'valid' } catch { Add-Check 'Configuration' $false $_.Exception.Message; $config = $null }
+    try { $config = Get-RivetConfiguration -ConfigPath $ConfigPath; Add-Check 'Configuration' $true 'valid' } catch { Add-Check 'Configuration' $false $_.Exception.Message; $config = $null }
     $metadataPath = [System.IO.Path]::Combine($RepositoryRoot, 'repo_meta.json')
     Add-Check 'repo_meta.json' ([System.IO.File]::Exists($metadataPath)) 'repository metadata source'
     $inside = if ($git) { (& git -C $RepositoryRoot rev-parse --is-inside-work-tree 2>$null) -eq 'true' } else { $false }
@@ -37,7 +37,7 @@ function Test-GlmetaRepository {
             Add-Check 'README requirements' $false $_.Exception.Message
         }
     }
-    [Console]::WriteLine((Format-AnsiText -Text 'GLMETA DOCTOR' -Color @(0, 200, 255) -Bold))
+    [Console]::WriteLine((Format-AnsiText -Text 'RIVET DOCTOR' -Color @(0, 200, 255) -Bold))
     foreach ($check in $checks) {
         $state = if ($check.Passed) { 'OK  ' } elseif (-not $check.Required) { 'WARN' } else { 'FAIL' }
         $color = if ($check.Passed) { @(80, 220, 150) } elseif (-not $check.Required) { @(255, 195, 75) } else { @(255, 90, 105) }

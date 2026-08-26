@@ -1,14 +1,14 @@
-function Get-GlmetaConfiguration {
+function Get-RivetConfiguration {
     <#
     .SYNOPSIS
-        Loads and validates reusable glmeta repository configuration.
+        Loads and validates reusable rivet repository configuration.
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$ConfigPath)
 
     $fullPath = [System.IO.Path]::GetFullPath($ConfigPath)
-    if (-not [System.IO.File]::Exists($fullPath)) { throw "glmeta configuration not found: $fullPath" }
-    try { $config = [System.IO.File]::ReadAllText($fullPath) | ConvertFrom-Json -Depth 32 } catch { throw "Invalid glmeta JSON configuration: $($_.Exception.Message)" }
+    if (-not [System.IO.File]::Exists($fullPath)) { throw "rivet configuration not found: $fullPath" }
+    try { $config = [System.IO.File]::ReadAllText($fullPath) | ConvertFrom-Json -Depth 32 } catch { throw "Invalid rivet JSON configuration: $($_.Exception.Message)" }
     $errors = [System.Collections.Generic.List[string]]::new()
     foreach ($requirement in @(
         @{ Path = 'project.displayName'; Value = $config.project.displayName },
@@ -30,7 +30,7 @@ function Get-GlmetaConfiguration {
             break
         }
     }
-    if ($errors.Count) { throw "Invalid glmeta configuration:`n - $($errors -join "`n - ")" }
+    if ($errors.Count) { throw "Invalid rivet configuration:`n - $($errors -join "`n - ")" }
     return $config
 }
 

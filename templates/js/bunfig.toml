@@ -1,0 +1,4 @@
+[test]
+preload = ["./tests/dom-setup.js"]
+coverageReporter = ["text", "lcov"]
+coverageDir = "coverage"

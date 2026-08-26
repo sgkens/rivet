@@ -49,5 +49,5 @@ branding/dist
 # merge request templates
 mr.md
 
-# Repository-local glmeta checkout managed by glm.ps1
-/glmeta/
+# Repository-local rivet checkout managed by rivet.ps1
+/rivet/

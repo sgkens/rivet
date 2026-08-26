@@ -1,7 +1,7 @@
-function Initialize-GlmetaRepository {
+function Initialize-RivetRepository {
     <#
     .SYNOPSIS
-        Creates missing repository-root glmeta configuration from templates.
+        Creates missing repository-root rivet configuration from templates.
     .DESCRIPTION
         Infers safe project defaults from package.json, the current Git branch,
         and the origin remote. Existing files are validated and never replaced.
@@ -76,11 +76,11 @@ function Initialize-GlmetaRepository {
         $destination = [System.IO.Path]::Combine($repositoryPath, ($fileName -replace '/', [System.IO.Path]::DirectorySeparatorChar))
         $template = [System.IO.Path]::Combine($TemplateRoot, ($entry.Template -replace '/', [System.IO.Path]::DirectorySeparatorChar))
         if (-not [System.IO.File]::Exists($template)) {
-            if ($entry.Mandatory) { throw "glmeta template not found: $template" }
+            if ($entry.Mandatory) { throw "rivet template not found: $template" }
             continue
         }
         if ([System.IO.File]::Exists($destination)) {
-            if ($fileName -eq 'repo_config.json') { $null = Get-GlmetaConfiguration -ConfigPath $destination }
+            if ($fileName -eq 'repo_config.json') { $null = Get-RivetConfiguration -ConfigPath $destination }
             $results.Add([pscustomobject]@{ File = $fileName; State = 'EXISTS'; Path = $destination })
             continue
         }

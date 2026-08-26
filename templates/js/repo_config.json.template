@@ -46,7 +46,7 @@
       { "name": "revert", "description": "revert an earlier commit" }
     ],
     "scopes": [
-      { "name": "glmeta", "description": "repository metadata automation", "paths": ["glm.ps1"] },
+      { "name": "rivet", "description": "repository metadata automation", "paths": ["rivet.ps1"] },
       { "name": "core", "description": "library runtime", "paths": ["src/**", "tests/**", "index.html", "vite*.js", "bunfig.toml"] },
       { "name": "docs", "description": "documentation site and guides", "paths": ["docs/**", "public/**", "editors/**", "README*.md"] },
       { "name": "release", "description": "versioning and release assets", "paths": ["CHANGELOG.md", "release-notes.md", "package*.json", "bun.lock", "jsr.jsonc", "scripts/**", "docs/data/changelog.json", "README*.md"] },

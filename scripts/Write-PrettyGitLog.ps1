@@ -45,7 +45,7 @@ function Write-PrettyGitLog {
 
     $gitArguments = [System.Collections.Generic.List[string]]::new()
     $readCount = if ([string]::IsNullOrWhiteSpace($Scope)) { $Count } else { 5000 }
-    $gitArguments.AddRange([string[]]@('-C', $repositoryPath, 'log', "--max-count=$readCount", '--date=iso-strict', '--numstat', '--format=__GLMETA_COMMIT__%x1f%H%x1f%h%x1f%D%x1f%aN%x1f%aE%x1f%cI%x1f%cr%x1f%G?%x1f%p%x1f%s'))
+    $gitArguments.AddRange([string[]]@('-C', $repositoryPath, 'log', "--max-count=$readCount", '--date=iso-strict', '--numstat', '--format=__RIVET_COMMIT__%x1f%H%x1f%h%x1f%D%x1f%aN%x1f%aE%x1f%cI%x1f%cr%x1f%G?%x1f%p%x1f%s'))
     if ($All) { $gitArguments.Add('--all') }
     if ($NoMerges) { $gitArguments.Add('--no-merges') }
     $rawLog = @(& git @gitArguments)
@@ -54,7 +54,7 @@ function Write-PrettyGitLog {
     $commits = [System.Collections.Generic.List[object]]::new()
     $current = $null
     foreach ($line in $rawLog) {
-        if ($line.StartsWith('__GLMETA_COMMIT__')) {
+        if ($line.StartsWith('__RIVET_COMMIT__')) {
             if ($null -ne $current) { $commits.Add($current) }
             $fields = $line.Split([char]0x1f)
             $current = [pscustomobject]@{

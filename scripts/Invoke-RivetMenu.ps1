@@ -1,20 +1,20 @@
 <#
 .SYNOPSIS
-    Opens the reusable glmeta workflow menu.
+    Opens the reusable rivet workflow menu.
 .DESCRIPTION
     Builds reviewed run.ps1 invocations for local metadata, release documents,
     merge requests, GitLab metadata, Conventional Commits, Git history, and
     help. Workflow defaults avoid unrelated writes and destructive choices.
 .PARAMETER RunnerPath
-    Absolute or relative path to the glmeta run.ps1 entry point.
+    Absolute or relative path to the rivet run.ps1 entry point.
 .PARAMETER ConfigPath
     Path to repo_config.json used for the project display name.
 .PARAMETER RepositoryRoot
     Consuming repository operated on by reviewed runner commands.
 .EXAMPLE
-    Invoke-GlmetaMenu -RunnerPath ./glmeta/run.ps1 -ConfigPath ./repo_config.json -RepositoryRoot ./
+    Invoke-RivetMenu -RunnerPath ./rivet/run.ps1 -ConfigPath ./repo_config.json -RepositoryRoot ./
 #>
-function Invoke-GlmetaMenu {
+function Invoke-RivetMenu {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$RunnerPath,
@@ -23,7 +23,7 @@ function Invoke-GlmetaMenu {
     )
 
     if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) {
-        throw 'The glmeta menu requires an interactive terminal. Use run.ps1 help for non-interactive usage.'
+        throw 'The rivet menu requires an interactive terminal. Use run.ps1 help for non-interactive usage.'
     }
     $resolvedRunner = [System.IO.Path]::GetFullPath($RunnerPath)
     if (-not [System.IO.File]::Exists($resolvedRunner)) { throw "Runner not found: $resolvedRunner" }
@@ -47,9 +47,8 @@ function Invoke-GlmetaMenu {
     }
 
     function New-MenuItem([string]$Label, [object]$Value, [string]$Description = '', [switch]$MultiAction) {
-        $displayLabel = if ($MultiAction) { "[MA] $Label" } else { $Label }
         [pscustomobject]@{
-            Label = $displayLabel
+            Label = $Label
             Value = $Value
             Description = $Description
             MultiAction = [bool]$MultiAction
@@ -87,7 +86,7 @@ function Invoke-GlmetaMenu {
 
     function Format-RunnerCommand([System.Collections.IDictionary]$Parameters) {
         $parts = [System.Collections.Generic.List[string]]::new()
-        $parts.Add('./glm.ps1')
+        $parts.Add('./rivet.ps1')
         foreach ($key in $Parameters.Keys) {
             $value = $Parameters[$key]
             if ($value -is [bool]) {
@@ -102,24 +101,60 @@ function Invoke-GlmetaMenu {
 
     function Invoke-ReviewedWorkflow {
         param([string]$Title, [System.Collections.IDictionary]$Parameters)
-        [Console]::WriteLine('')
-        [Console]::WriteLine((Format-AnsiText -Text 'COMMAND REVIEW' -Color @(0, 200, 255) -Bold))
-        [Console]::WriteLine((Format-AnsiText -Text $Title -Color @(220, 225, 235) -Bold))
-        [Console]::WriteLine((Format-AnsiText -Text (Format-RunnerCommand $Parameters) -Color @(80, 220, 150)))
+        $reviewWidth = [Math]::Max(30, [Math]::Min(132, ([Console]::WindowWidth - 2)))
+        $reviewContentWidth = [Math]::Max(20, $reviewWidth - 6)
+        $commandLines = @(Split-SMenuText -Text (Format-RunnerCommand $Parameters) -Width $reviewContentWidth)
+        $reviewLines = [System.Collections.Generic.List[string]]::new()
+        $reviewLines.Add((Format-AnsiText -Text $Title -Color @(220, 225, 235) -Bold))
+        $reviewLines.Add('')
+        $reviewLines.Add((Format-AnsiText -Text 'COMMAND' -Color @(145, 155, 175) -Bold))
+        foreach ($commandLine in $commandLines) {
+            $reviewLines.Add((Format-AnsiText -Text $commandLine -Color @(80, 220, 150)))
+        }
+        [Console]::Clear()
+        [Console]::WriteLine((New-TuiPanel -Content $reviewLines.ToArray() -Title 'COMMAND REVIEW' -Width $reviewWidth -BorderStyle Rounded -ColorPalette @{ Border = @(48, 58, 78); Title = @(0, 210, 255) }))
         [Console]::WriteLine('')
         $runChoice = Select-MenuValue -Title 'RUN THIS WORKFLOW?' -Items @(
             (New-MenuItem 'Run command' 'run' 'execute the reviewed parameters')
             (New-MenuItem 'Back' 'back' 'return without running')
         )
         if ($runChoice -ne 'run') { return }
-        [Console]::WriteLine('')
+        [Console]::Clear()
+        $workflowTimer = [System.Diagnostics.Stopwatch]::StartNew()
+        $workflowState = 'COMPLETE'
+        $isHelpWorkflow = $Parameters.Contains('Help') -and [bool]$Parameters.Help
+        $workflowOutput = @()
         try {
-            & $resolvedRunner -RepositoryRoot $repositoryRoot @Parameters
+            # Keep workflow module imports outside the active TUI process.
+            # Re-importing Rivet while this function runs invalidates its local
+            # menu functions when control returns from the workflow.
+            if ($isHelpWorkflow) {
+                $workflowOutput = @(& pwsh -NoLogo -NoProfile -File $resolvedRunner -RepositoryRoot $repositoryRoot @Parameters 2>&1)
+            } else {
+                & pwsh -NoLogo -NoProfile -File $resolvedRunner -RepositoryRoot $repositoryRoot @Parameters
+            }
+            if ($LASTEXITCODE -ne 0) {
+                throw "Rivet workflow exited with code $LASTEXITCODE."
+            }
         } catch {
+            $workflowState = 'FAILED'
             [Console]::WriteLine((Format-AnsiText -Text "FAILED  $($_.Exception.Message)" -Color @(255, 90, 105) -Bold))
+        } finally {
+            $workflowTimer.Stop()
+        }
+        if ($isHelpWorkflow -and $workflowState -eq 'COMPLETE') {
+            Show-RivetPager -Title 'RIVET HELP' -Lines ([string[]]$workflowOutput)
+            return
         }
         [Console]::WriteLine('')
-        [Console]::WriteLine((Format-AnsiText -Text 'Press any key to return to the glmeta menu.' -Color @(145, 155, 175)))
+        $elapsed = Get-ElapsedTime -TimeSpan $workflowTimer.Elapsed
+        $resultColor = if ($workflowState -eq 'COMPLETE') { @(80, 220, 150) } else { @(255, 90, 105) }
+        $resultLines = @(
+            (Format-AnsiText -Text "$workflowState  $elapsed" -Color $resultColor -Bold)
+            (Format-AnsiText -Text 'Press any key to return to the command center.' -Color @(145, 155, 175))
+        )
+        $resultWidth = [Math]::Max(30, [Math]::Min(132, ([Console]::WindowWidth - 2)))
+        [Console]::WriteLine((New-TuiPanel -Content $resultLines -Title 'WORKFLOW RESULT' -Width $resultWidth -BorderStyle Rounded -ColorPalette @{ Border = @(48, 58, 78); Title = $resultColor }))
         $null = [Console]::ReadKey($true)
     }
 
@@ -157,11 +192,6 @@ function Invoke-GlmetaMenu {
         return $true
     }
 
-    $menuAsciiHeader = @'
- ⢀⡀ ⡇ ⣀⣀  ⢀⡀ ⣰⡀ ⢀⣀   ⠄ ⣀⡀ ⣰⡀ ⢀⡀ ⡀⣀ ⢀⣀ ⢀⣀ ⣰⡀ ⠄ ⡀⢀ ⢀⡀   ⡷⢾ ⢀⡀ ⣀⡀ ⡀⢀
- ⣑⡺ ⠣ ⠇⠇⠇ ⠣⠭ ⠘⠤ ⠣⠼   ⠇ ⠇⠸ ⠘⠤ ⠣⠭ ⠏  ⠣⠼ ⠣⠤ ⠘⠤ ⠇ ⠱⠃ ⠣⠭   ⠇⠸ ⠣⠭ ⠇⠸ ⠣⠼
-'@
-    $menuHeaderTokens = ConvertTo-AsciiTokens -Lines ($menuAsciiHeader -split '\r?\n') -Connectivity 8
     $mainItems = @(
         (New-MenuItem 'Initialize repository' 'init' 'create or validate root configuration' -MultiAction)
         (New-MenuItem 'Prep Release' 'prep_release' 'manifests, release docs, READMEs, and mr.md' -MultiAction)
@@ -179,21 +209,11 @@ function Invoke-GlmetaMenu {
         (New-MenuItem 'Exit' 'exit')
     )
 
+    Enable-TerminalAltBuffer
+    try {
     while ($true) {
         [Console]::Clear()
-        foreach ($headerLine in @(ConvertTo-GradientAsciiLines -TokenObject $menuHeaderTokens -Mode Horizontal -StartColor @(0, 200, 255) -EndColor @(255, 60, 180))) {
-            [Console]::WriteLine($headerLine)
-        }
-        [Console]::Write((Format-AnsiText -Text 'GLMETA COMMAND CENTER  ' -Color @(220, 225, 235) -Bold))
-        [Console]::Write((Format-AnsiText -Text $projectName -Color @(80, 220, 150) -Bold))
-        [Console]::Write((Format-AnsiText -Text '  ' -Color @(145, 155, 175)))
-        [Console]::Write((Format-AnsiText -Text $packageName -Color @(0, 200, 255)))
-        [Console]::WriteLine((Format-AnsiText -Text " v$packageVersion" -Color @(255, 195, 75) -Bold))
-        [Console]::WriteLine((Format-AnsiText -Text 'Every workflow is reviewed before execution.' -Color @(145, 155, 175)))
-        [Console]::Write((Format-AnsiText -Text '[MA]' -Color @(190, 100, 255) -Bold))
-        [Console]::WriteLine((Format-AnsiText -Text ' runs multiple glmeta actions in one reviewed workflow.' -Color @(110, 120, 145)))
-        [Console]::WriteLine('')
-        $action = Select-MenuValue -Title 'SELECT WORKFLOW' -Items $mainItems
+        $action = Select-MenuValue -Title "RIVET  SELECT WORKFLOW  $projectName  $packageName v$packageVersion" -Items $mainItems
         if ($null -eq $action -or $action -eq 'exit') { return }
 
         switch ($action) {
@@ -245,15 +265,34 @@ function Invoke-GlmetaMenu {
                 $kind = Select-MenuValue -Title 'RELEASE DOCUMENTS' -Items @(
                     (New-MenuItem 'Generate draft' 'draft' 'update changelog and release notes')
                     (New-MenuItem 'Finalize release' 'finalize' 'write the dated release sections')
+                    (New-MenuItem 'Rebuild changelog' 'rebuild' 'regenerate entire CHANGELOG.md across all tags' -MultiAction)
                 )
                 if ($null -eq $kind) { continue }
                 $p = [ordered]@{}
                 Add-IsolatedActionDefaults $p
-                if ($kind -eq 'finalize') { $p.FinalizeRelease = $true } else { $p.UpdateReleaseDocs = $true }
-                if (-not (Add-DocumentOptions $p)) { continue }
+                if ($kind -eq 'finalize') {
+                    $p.FinalizeRelease = $true
+                } elseif ($kind -eq 'rebuild') {
+                    $p.RebuildChangelog = $true
+                } else {
+                    $p.UpdateReleaseDocs = $true
+                }
+                if ($kind -ne 'rebuild') {
+                    if (-not (Add-DocumentOptions $p)) { continue }
+                } else {
+                    $scope = Read-OptionalValue 'Exact Conventional Commit scope; blank includes all'
+                    if ($scope) { $p.CommitScope = $scope }
+                    $includeHash = Select-YesNo -Title 'INCLUDE COMMIT HASHES?' -Default $true
+                    if ($null -eq $includeHash) { continue }
+                    if (-not $includeHash) { $p.IncludeCommitHash = $false }
+                    $includeAuthor = Select-YesNo -Title 'INCLUDE COMMIT AUTHORS?' -Default $true
+                    if ($null -eq $includeAuthor) { continue }
+                    if (-not $includeAuthor) { $p.IncludeAuthor = $false }
+                }
                 if (-not (Add-ChangelogJsonOption $p)) { continue }
                 if (-not (Select-PreviewMode $p)) { continue }
-                Invoke-ReviewedWorkflow -Title 'Release documentation' -Parameters $p
+                $workflowTitle = if ($kind -eq 'rebuild') { 'Rebuild complete changelog' } else { 'Release documentation' }
+                Invoke-ReviewedWorkflow -Title $workflowTitle -Parameters $p
             }
             'merge_request' {
                 $kind = Select-MenuValue -Title 'MERGE REQUEST' -Items @(
@@ -335,8 +374,16 @@ function Invoke-GlmetaMenu {
                 $topic = Read-OptionalValue 'Parameter name or alias; blank opens overview'
                 $p = [ordered]@{ Help = $true }
                 if ($topic) { $p.HelpParameter = $topic }
-                Invoke-ReviewedWorkflow -Title 'glmeta manual' -Parameters $p
+                Invoke-ReviewedWorkflow -Title 'rivet manual' -Parameters $p
             }
         }
+    }
+    } finally {
+        # Restore the terminal even if a helper is removed after module import.
+        # The direct ANSI fallback keeps cleanup independent from mutable files.
+        $showCursor = Get-Command -Name Show-TerminalCursor -CommandType Function -ErrorAction SilentlyContinue
+        if ($showCursor) { Show-TerminalCursor } else { [Console]::Write("$([char]27)[?25h") }
+        $disableAltBuffer = Get-Command -Name Disable-TerminalAltBuffer -CommandType Function -ErrorAction SilentlyContinue
+        if ($disableAltBuffer) { Disable-TerminalAltBuffer } else { [Console]::Write("$([char]27)[?1049l") }
     }
 }

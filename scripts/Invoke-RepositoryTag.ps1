@@ -8,7 +8,7 @@
 .PARAMETER RepositoryRoot
     Git repository whose HEAD will be tagged.
 .PARAMETER ConfigPath
-    glmeta configuration containing tagging defaults.
+    rivet configuration containing tagging defaults.
 .PARAMETER Version
     Optional MAJOR.MINOR.PATCH override without the tag prefix.
 .PARAMETER Snapshot
@@ -30,10 +30,10 @@ function Invoke-RepositoryTag {
     )
 
     $repositoryPath = [System.IO.Path]::GetFullPath($RepositoryRoot)
-    if (-not [System.IO.File]::Exists($ConfigPath)) { throw "glmeta config not found: $ConfigPath" }
+    if (-not [System.IO.File]::Exists($ConfigPath)) { throw "rivet config not found: $ConfigPath" }
     $config = [System.IO.File]::ReadAllText($ConfigPath) | ConvertFrom-Json
     $tagging = $config.tagging
-    if ($null -eq $tagging) { throw "The glmeta config does not define a 'tagging' object." }
+    if ($null -eq $tagging) { throw "The rivet config does not define a 'tagging' object." }
     $prefix = [string]$tagging.prefix
     $releaseSuffix = [string]$tagging.releaseSuffix
     $remote = [string]$tagging.remote

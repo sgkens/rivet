@@ -18,7 +18,7 @@ function Invoke-GitLabMergeRequest {
         [switch]$DryRun
     )
 
-    $config = Get-GlmetaConfiguration -ConfigPath $ConfigPath
+    $config = Get-RivetConfiguration -ConfigPath $ConfigPath
     $documentPath = [System.IO.Path]::Combine([System.IO.Path]::GetFullPath($RepositoryRoot), 'mr.md')
     if (-not [System.IO.File]::Exists($documentPath)) { throw "Merge-request document not found: $documentPath" }
     $content = [System.IO.File]::ReadAllText($documentPath)

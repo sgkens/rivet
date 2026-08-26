@@ -1,37 +1,77 @@
 <#
 .SYNOPSIS
-    Displays an ordered, keyboard-driven terminal selection menu.
+    Displays a resize-aware, keyboard-driven terminal menu.
 .DESCRIPTION
-    Renders only the menu region, returns the selected item value, and restores
-    the cursor when the operation is cancelled. Arrow keys, Home, End, Enter,
-    and Escape are supported. No global console colors or screen clears are used.
-.PARAMETER Items
-    Ordered menu items. Each item must expose Label and Value properties.
-.PARAMETER Title
-    Heading displayed above the menu.
-.PARAMETER DefaultIndex
-    Zero-based item selected when the menu opens.
-.PARAMETER ViewSize
-    Maximum number of visible items.
-.EXAMPLE
-    $selected = Show-SMenu -Title 'Commit type' -Items @(
-        [pscustomobject]@{ Label = 'feat - feature'; Value = 'feat' }
-        [pscustomobject]@{ Label = 'fix  - bug fix'; Value = 'fix' }
-    )
+    Redraws atomically when the terminal size or selection changes. Wide
+    terminals render label and description columns. Narrow terminals stack
+    and wrap selected detail. Short terminals expose a scrolling viewport.
 #>
+function Get-SMenuTerminalSize {
+    [CmdletBinding()]
+    param()
+
+    $width = try { [Console]::WindowWidth } catch { 120 }
+    $height = try { [Console]::WindowHeight } catch { 30 }
+    [pscustomobject]@{
+        Width = [Math]::Max(24, $width)
+        Height = [Math]::Max(10, $height)
+    }
+}
+
+function Split-SMenuText {
+    [CmdletBinding()]
+    param(
+        [AllowEmptyString()][string]$Text,
+        [ValidateRange(1, [int]::MaxValue)][int]$Width
+    )
+
+    $lines = [System.Collections.Generic.List[string]]::new()
+    foreach ($paragraph in ($Text -split '\r?\n')) {
+        $remaining = $paragraph.Trim()
+        if (-not $remaining.Length) { $lines.Add(''); continue }
+        while ($remaining.Length -gt $Width) {
+            $breakAt = $remaining.LastIndexOf(' ', $Width)
+            if ($breakAt -lt 1) { $breakAt = $Width }
+            $lines.Add($remaining.Substring(0, $breakAt).TrimEnd())
+            $remaining = $remaining.Substring($breakAt).TrimStart()
+        }
+        $lines.Add($remaining)
+    }
+    return $lines.ToArray()
+}
+
+function Get-SMenuLayout {
+    [CmdletBinding()]
+    param(
+        [ValidateRange(1, [int]::MaxValue)][int]$TerminalWidth,
+        [ValidateRange(1, [int]::MaxValue)][int]$TerminalHeight,
+        [ValidateRange(1, [int]::MaxValue)][int]$ItemCount,
+        [ValidateRange(3, 100)][int]$ViewSize = 30
+    )
+
+    $frameWidth = [Math]::Max(22, [Math]::Min(132, $TerminalWidth - 2))
+    $contentWidth = [Math]::Max(16, $frameWidth - 4)
+    $wide = $contentWidth -ge 76
+    $reservedRows = if ($wide) { 8 } else { 11 }
+    $visibleItems = [Math]::Max(1, [Math]::Min([Math]::Min($ViewSize, $ItemCount), $TerminalHeight - $reservedRows))
+    $labelWidth = if ($wide) { [Math]::Max(20, [int][Math]::Floor($contentWidth * 0.38)) } else { $contentWidth - 4 }
+    [pscustomobject]@{
+        FrameWidth = $frameWidth
+        ContentWidth = $contentWidth
+        Wide = $wide
+        VisibleItems = $visibleItems
+        LabelWidth = $labelWidth
+        DescriptionWidth = if ($wide) { [Math]::Max(20, $contentWidth - $labelWidth - 5) } else { $contentWidth - 4 }
+    }
+}
+
 function Show-SMenu {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
-        [ValidateNotNullOrEmpty()]
-        [object[]]$Items,
-        [Parameter(Mandatory)]
-        [ValidateNotNullOrEmpty()]
-        [string]$Title,
-        [ValidateRange(0, [int]::MaxValue)]
-        [int]$DefaultIndex = 0,
-        [ValidateRange(3, 30)]
-        [int]$ViewSize = 10
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][object[]]$Items,
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$Title,
+        [ValidateRange(0, [int]::MaxValue)][int]$DefaultIndex = 0,
+        [ValidateRange(3, 100)][int]$ViewSize = 30
     )
 
     if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) {
@@ -40,125 +80,121 @@ function Show-SMenu {
     if ($DefaultIndex -ge $Items.Count) { $DefaultIndex = 0 }
 
     $esc = [char]27
-    $palette = @{
-        Accent = @(0, 200, 255); GradientEnd = @(255, 60, 180)
-        Muted = @(145, 155, 175); Text = @(220, 225, 235); Description = @(92, 102, 122)
+    $colors = [ordered]@{
+        Reset = "$esc[0m"
+        Border = "$esc[38;2;48;58;78m"
+        Accent = "$esc[1;38;2;0;210;255m"
+        Secondary = "$esc[38;2;255;70;180m"
+        Text = "$esc[38;2;224;230;240m"
+        Muted = "$esc[38;2;130;142;166m"
+        Faint = "$esc[38;2;82;94;118m"
+        Selected = "$esc[1;38;2;255;255;255m"
+        Multi = "$esc[1;38;2;196;112;255m"
     }
-    $visibleCount = [Math]::Min($ViewSize, $Items.Count)
     $currentIndex = $DefaultIndex
-    $topIndex = [Math]::Max(0, [Math]::Min($currentIndex, $Items.Count - $visibleCount))
+    $topIndex = 0
+    $lastWidth = -1
+    $lastHeight = -1
+    $needsRedraw = $true
 
-    function Write-SMenuLine {
-        param([string]$Text, [int[]]$Color, [switch]$Bold)
-        $weight = if ($Bold) { '1;' } else { '' }
-        [Console]::Write("$esc[2K`r$esc[${weight}38;2;$($Color[0]);$($Color[1]);$($Color[2])m$Text$esc[0m")
+    function Get-ItemTitle([object]$Item) {
+        $label = [string]$Item.Label
+        $multiProperty = $Item.PSObject.Properties['MultiAction']
+        if ($null -ne $multiProperty -and [bool]$multiProperty.Value) { return "$label [MA]" }
+        return $label
     }
 
-    function Format-SMenuText {
-        param([AllowEmptyString()][string]$Text, [int[]]$Color, [switch]$Bold, [switch]$Italic)
-        $styles = [System.Collections.Generic.List[string]]::new(2)
-        if ($Bold) { $styles.Add('1') }
-        if ($Italic) { $styles.Add('3') }
-        $stylePrefix = if ($styles.Count) { ($styles -join ';') + ';' } else { '' }
-        return "$esc[${stylePrefix}38;2;$($Color[0]);$($Color[1]);$($Color[2])m$Text$esc[0m"
-    }
+    function Write-Frame([object]$Size) {
+        $layout = Get-SMenuLayout -TerminalWidth $Size.Width -TerminalHeight $Size.Height -ItemCount $Items.Count -ViewSize $ViewSize
+        if ($currentIndex -lt $topIndex) { $topIndex = $currentIndex }
+        if ($currentIndex -ge ($topIndex + $layout.VisibleItems)) { $topIndex = $currentIndex - $layout.VisibleItems + 1 }
+        $topIndex = [Math]::Max(0, [Math]::Min($topIndex, [Math]::Max(0, $Items.Count - $layout.VisibleItems)))
 
-    function Format-SMenuGradient {
-        param([AllowEmptyString()][string]$Text)
-        if ($Text.Length -eq 0) { return '' }
-        $builder = [System.Text.StringBuilder]::new($Text.Length * 24)
-        $denominator = [Math]::Max(1, $Text.Length - 1)
-        for ($index = 0; $index -lt $Text.Length; $index++) {
-            $ratio = $index / $denominator
-            $red = [int]($palette.Accent[0] + (($palette.GradientEnd[0] - $palette.Accent[0]) * $ratio))
-            $green = [int]($palette.Accent[1] + (($palette.GradientEnd[1] - $palette.Accent[1]) * $ratio))
-            $blue = [int]($palette.Accent[2] + (($palette.GradientEnd[2] - $palette.Accent[2]) * $ratio))
-            [void]$builder.Append("$esc[1;3;38;2;$red;$green;${blue}m$($Text[$index])")
-        }
-        [void]$builder.Append("$esc[0m")
-        return $builder.ToString()
-    }
+        $inner = $layout.FrameWidth - 2
+        $builder = [System.Text.StringBuilder]::new([Math]::Max(2048, $layout.FrameWidth * $Size.Height))
+        $rule = [string]::new([char]0x2500, $inner)
+        [void]$builder.Append("$esc[H$esc[2J")
+        [void]$builder.AppendLine("$($colors.Border)┌$rule┐$($colors.Reset)")
+        $titleRow = Pad-AnsiString -Text "$($colors.Accent) $Title $($colors.Reset)" -Width $inner -Align Left -Truncate
+        [void]$builder.AppendLine("$($colors.Border)│$($colors.Reset)$titleRow$($colors.Border)│$($colors.Reset)")
+        $position = "$($currentIndex + 1)/$($Items.Count)"
+        $hintBudget = [Math]::Max(1, $inner - $position.Length - 1)
+        $hint = Pad-AnsiString -Text "$($colors.Muted) arrows navigate  enter select  home/end jump  esc back$($colors.Reset)" -Width $hintBudget -Align Left -Truncate
+        [void]$builder.AppendLine("$($colors.Border)│$($colors.Reset)$hint $($colors.Faint)$position$($colors.Reset)$($colors.Border)│$($colors.Reset)")
+        [void]$builder.AppendLine("$($colors.Border)├$rule┤$($colors.Reset)")
 
-    function Limit-SMenuText {
-        param([AllowEmptyString()][string]$Text, [int]$MaximumLength)
-        if ($MaximumLength -le 0) { return '' }
-        if ($Text.Length -le $MaximumLength) { return $Text }
-        if ($MaximumLength -le 3) { return $Text.Substring(0, $MaximumLength) }
-        return $Text.Substring(0, $MaximumLength - 3) + '...'
-    }
-
-    function Render-SMenu {
-        param([switch]$Redraw)
-
-        $terminalWidth = try { [Console]::WindowWidth } catch { 120 }
-        if ($terminalWidth -lt 20) { $terminalWidth = 20 }
-        # Leave the final terminal column unused. Writing into it can trigger an
-        # automatic wrap that moves the saved redraw origin and duplicates rows.
-        $maximumRowWidth = $terminalWidth - 1
-        if ($Redraw) {
-            # Rewind only the rows owned by this menu. Relative movement remains
-            # stable when the terminal scrolls; saved cursor slots do not.
-            [Console]::Write("$esc[$($visibleCount + 2)A`r")
-        }
-        Write-SMenuLine -Text (Limit-SMenuText -Text $Title -MaximumLength $maximumRowWidth) -Color $palette.Accent -Bold
-        [Console]::WriteLine()
-        Write-SMenuLine -Text (Limit-SMenuText -Text '  up/down navigate  enter select  esc cancel' -MaximumLength $maximumRowWidth) -Color $palette.Muted
-        [Console]::WriteLine()
-        $labelWidth = 0
-        foreach ($menuItem in $Items) { $labelWidth = [Math]::Max($labelWidth, ([string]$menuItem.Label).Length) }
-        $contentWidth = [Math]::Max(8, $maximumRowWidth - 5)
-        $labelBudget = [Math]::Min($labelWidth, [Math]::Max(8, [int][Math]::Floor($contentWidth * 0.42)))
-        for ($row = 0; $row -lt $visibleCount; $row++) {
+        for ($row = 0; $row -lt $layout.VisibleItems; $row++) {
             $itemIndex = $topIndex + $row
+            if ($itemIndex -ge $Items.Count) {
+                [void]$builder.AppendLine("$($colors.Border)│$($colors.Reset)$(' ' * $inner)$($colors.Border)│$($colors.Reset)")
+                continue
+            }
+            $item = $Items[$itemIndex]
             $selected = $itemIndex -eq $currentIndex
-            $label = [string]$Items[$itemIndex].Label
-            $descriptionProperty = $Items[$itemIndex].PSObject.Properties['Description']
+            $titlePlain = Get-ItemTitle $item
+            $multi = $titlePlain.EndsWith(' [MA]', [System.StringComparison]::Ordinal)
+            $baseTitle = if ($multi) { $titlePlain.Substring(0, $titlePlain.Length - 5) } else { $titlePlain }
+            $marker = if ($selected) { ' > ' } else { '   ' }
+            $titleColor = if ($selected) { $colors.Selected } else { $colors.Text }
+            $titleText = "$titleColor$baseTitle$($colors.Reset)"
+            if ($multi) { $titleText += "$($colors.Multi) [MA]$($colors.Reset)" }
+            $descriptionProperty = $item.PSObject.Properties['Description']
             $description = if ($null -eq $descriptionProperty) { '' } else { [string]$descriptionProperty.Value }
-            $descriptionBudget = $contentWidth - $labelBudget - 2
-            $showDescription = $description -and $descriptionBudget -ge 8
-            if ($showDescription) {
-                $renderedLabel = (Limit-SMenuText -Text $label -MaximumLength $labelBudget).PadRight($labelBudget)
-                $renderedDescription = Limit-SMenuText -Text $description -MaximumLength $descriptionBudget
+
+            if ($layout.Wide) {
+                $labelCell = Pad-AnsiString -Text "$marker$titleText" -Width ($layout.LabelWidth + 3) -Align Left -Truncate
+                $descriptionCell = Pad-AnsiString -Text "$($colors.Muted)$description$($colors.Reset)" -Width $layout.DescriptionWidth -Align Left -Truncate
+                $line = Pad-AnsiString -Text "$labelCell  $descriptionCell" -Width $inner -Align Left -Truncate
             } else {
-                $renderedLabel = Limit-SMenuText -Text $label -MaximumLength $contentWidth
-                $renderedDescription = ''
+                $line = Pad-AnsiString -Text "$marker$titleText" -Width $inner -Align Left -Truncate
             }
-            [Console]::Write("$esc[2K`r")
-            if ($selected) {
-                # The active row intentionally receives one additional leading
-                # space. Padding is calculated before ANSI gradient encoding.
-                [Console]::Write('   ')
-                [Console]::Write((Format-SMenuGradient -Text "> $renderedLabel"))
-            } else {
-                [Console]::Write('    ')
-                [Console]::Write((Format-SMenuText -Text $renderedLabel -Color $palette.Text))
-            }
-            if ($showDescription) {
-                [Console]::Write((Format-SMenuText -Text "  $renderedDescription" -Color $palette.Description))
-            }
-            [Console]::WriteLine()
+            [void]$builder.AppendLine("$($colors.Border)│$($colors.Reset)$line$($colors.Border)│$($colors.Reset)")
         }
+
+        [void]$builder.AppendLine("$($colors.Border)├$rule┤$($colors.Reset)")
+        $selectedItem = $Items[$currentIndex]
+        $detailTitle = "DETAIL  $(Get-ItemTitle $selectedItem)"
+        $detailLine = Pad-AnsiString -Text "$($colors.Secondary)$detailTitle$($colors.Reset)" -Width $inner -Align Left -Truncate
+        [void]$builder.AppendLine("$($colors.Border)│$($colors.Reset)$detailLine$($colors.Border)│$($colors.Reset)")
+        $detailLines = @(Split-SMenuText -Text ([string]$selectedItem.Description) -Width ([Math]::Max(8, $inner - 4)))
+        $detailRows = if ($layout.Wide) { 1 } else { [Math]::Min(3, [Math]::Max(1, $detailLines.Count)) }
+        for ($index = 0; $index -lt $detailRows; $index++) {
+            $detailText = if ($index -lt $detailLines.Count) { $detailLines[$index] } else { '' }
+            $detail = Pad-AnsiString -Text "$($colors.Muted)  $detailText$($colors.Reset)" -Width $inner -Align Left -Truncate
+            [void]$builder.AppendLine("$($colors.Border)│$($colors.Reset)$detail$($colors.Border)│$($colors.Reset)")
+        }
+        [void]$builder.Append("$($colors.Border)└$rule┘$($colors.Reset)$esc[J")
+        [Console]::Write($builder.ToString())
     }
 
     try {
-        [Console]::Write("$esc[?25l")
-        Render-SMenu
+        Hide-TerminalCursor
         while ($true) {
+            $size = Get-SMenuTerminalSize
+            if ($size.Width -ne $lastWidth -or $size.Height -ne $lastHeight) {
+                $lastWidth = $size.Width
+                $lastHeight = $size.Height
+                $needsRedraw = $true
+            }
+            if ($needsRedraw) { Write-Frame $size; $needsRedraw = $false }
+            if (-not [Console]::KeyAvailable) {
+                [System.Threading.Thread]::Sleep(40)
+                continue
+            }
             $key = [Console]::ReadKey($true)
             switch ($key.Key) {
-                'UpArrow' { if ($currentIndex -gt 0) { $currentIndex-- } }
-                'DownArrow' { if ($currentIndex -lt ($Items.Count - 1)) { $currentIndex++ } }
-                'Home' { $currentIndex = 0 }
-                'End' { $currentIndex = $Items.Count - 1 }
+                'UpArrow' { if ($currentIndex -gt 0) { $currentIndex--; $needsRedraw = $true } }
+                'DownArrow' { if ($currentIndex -lt ($Items.Count - 1)) { $currentIndex++; $needsRedraw = $true } }
+                'PageUp' { $currentIndex = [Math]::Max(0, $currentIndex - 5); $needsRedraw = $true }
+                'PageDown' { $currentIndex = [Math]::Min($Items.Count - 1, $currentIndex + 5); $needsRedraw = $true }
+                'Home' { $currentIndex = 0; $needsRedraw = $true }
+                'End' { $currentIndex = $Items.Count - 1; $needsRedraw = $true }
                 'Enter' { return $Items[$currentIndex].Value }
                 'Escape' { return $null }
             }
-            if ($currentIndex -lt $topIndex) { $topIndex = $currentIndex }
-            if ($currentIndex -ge ($topIndex + $visibleCount)) { $topIndex = $currentIndex - $visibleCount + 1 }
-            Render-SMenu -Redraw
         }
     } finally {
-        [Console]::Write("$esc[?25h")
+        Show-TerminalCursor
         [Console]::ResetColor()
     }
 }
