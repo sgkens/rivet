@@ -32,7 +32,9 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:bun": "bun test",
+    "test:coverage:bun": "bun test --coverage"
   },
   "keywords": [
     "staticcanvas",
