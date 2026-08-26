@@ -46,10 +46,11 @@
       { "name": "revert", "description": "revert an earlier commit" }
     ],
     "scopes": [
-      { "name": "core", "description": "library runtime", "paths": ["src/**", "tests/**", "bunfig.toml"] },
-      { "name": "docs", "description": "documentation", "paths": ["docs/**", "README*.md"] },
-      { "name": "release", "description": "release assets", "paths": ["CHANGELOG.md", "release-notes.md", "package*.json", "bun.lock", "jsr.jsonc", "docs/data/changelog.json", "README*.md"] },
-      { "name": "ci", "description": "pipeline configuration", "paths": [".gitlab-ci.yml"] },
+      { "name": "glmeta", "description": "repository metadata automation", "paths": ["glm.ps1"] },
+      { "name": "core", "description": "library runtime", "paths": ["src/**", "tests/**", "index.html", "vite*.js", "bunfig.toml"] },
+      { "name": "docs", "description": "documentation site and guides", "paths": ["docs/**", "public/**", "editors/**", "README*.md"] },
+      { "name": "release", "description": "versioning and release assets", "paths": ["CHANGELOG.md", "release-notes.md", "package*.json", "bun.lock", "jsr.jsonc", "scripts/**", "docs/data/changelog.json", "README*.md"] },
+      { "name": "ci", "description": "pipeline configuration", "paths": [".gitlab-ci.yml", "ci-failures.md"] },
       { "name": "none", "description": "omit the commit scope", "paths": ["**"] }
     ],
     "preview": { "maxDiffLines": 240 }

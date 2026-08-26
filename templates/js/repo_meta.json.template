@@ -4,12 +4,14 @@
   "scope": "project",
   "project": {
     "description": "{{DISPLAY_NAME}} is a JavaScript library.",
-    "topics": ["javascript", "library", "npm", "jsr", "documentation", "testing", "ci"]
+    "topics": ["javascript", "library", "npm", "jsr", "documentation", "testing", "ci", "core", "build", "release"]
   },
   "labels": [
     { "name": "core", "description": "Library runtime and public API.", "color": "#1f77b4", "textColor": "#FFFFFF" },
     { "name": "docs", "description": "README, guides, and API documentation.", "color": "#0d6efd", "textColor": "#FFFFFF" },
     { "name": "release", "description": "Versioning, packaging, and publication.", "color": "#6f42c1", "textColor": "#FFFFFF" },
-    { "name": "ci", "description": "Continuous integration and deployment.", "color": "#6610f2", "textColor": "#FFFFFF" }
+    { "name": "ci", "description": "Continuous integration and deployment.", "color": "#6610f2", "textColor": "#FFFFFF" },
+    { "name": "build", "description": "Vite, Rollup, package exports, generated bundles, and build configuration.", "color": "#fd7e14", "textColor": "#1c1c1c" },
+    { "name": "tests", "description": "Unit, integration, regression, browser, and coverage tests.", "color": "#198754", "textColor": "#FFFFFF" }
   ]
 }

@@ -13,6 +13,16 @@
       "require": "./dist/{{PROJECT_NAME}}.cjs",
       "default": "./dist/{{PROJECT_NAME}}.js"
     },
+    "./metrics": {
+      "import": "./dist/{{PROJECT_NAME}}-metrics.mjs",
+      "require": "./dist/{{PROJECT_NAME}}-metrics.cjs",
+      "default": "./dist/{{PROJECT_NAME}}-metrics.js"
+    },
+    "./debug": {
+      "import": "./dist/{{PROJECT_NAME}}-debug.mjs",
+      "require": "./dist/{{PROJECT_NAME}}-debug.cjs",
+      "default": "./dist/{{PROJECT_NAME}}-debug.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -25,16 +35,20 @@
   ],
   "scripts": {
     "dev": "vite",
+    "serve:demo": "vite --open docs/static/webutil/index.html",
     "docs:build": "npm run build && hugo --source docs",
     "docs:serve": "npm run build && hugo server --source docs --buildDrafts --disableFastRender --ignoreCache --noHTTPCache --gc",
-    "build": "vite build",
+    "build": "vite build && npm_config_mode=metrics vite build --config vite.optional.config.js && npm_config_mode=debug vite build --config vite.optional.config.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:bun": "bun test",
-    "test:coverage:bun": "bun test --coverage"
+    "test:coverage:bun": "bun test --coverage",
+    "check:size": "node scripts/check-bundle-size.mjs",
+    "validate:release": "node scripts/validate-release.mjs",
+    "check:quality": "npm run build && npm run check:size && npm test"
   },
   "keywords": [
     "staticcanvas",
@@ -42,6 +56,14 @@
   ],
   "author": "Garvey K. Snow",
   "license": "MIT",
+  "peerDependencies": {
+    "@staticcanvas/logcad": "^0.6.0"
+  },
+  "peerDependenciesMeta": {
+    "@staticcanvas/logcad": {
+      "optional": true
+    }
+  },
   "repository": {
     "type": "git",
     "url": "https://gitlab.com/{{PROJECT_PATH}}.git"

@@ -14,7 +14,7 @@
   // Defines what files users can import.
   // "." is the default import
   "exports": {
-    ".": "./src/index.js",
+    ".": "./src/{{PROJECT_NAME}}.js"
   },
   // ---------------------------------------------------------
   // PUBLISHING CONTROLS

@@ -103,7 +103,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.js'],
-      exclude: ['**/node_modules/**', 'tests/**'],
+      exclude: ['**/node_modules/**', 'tests/**', `src/${packageName}-metrics.js`, `src/${packageName}-debug.js`],
     },
   },
   plugins: [

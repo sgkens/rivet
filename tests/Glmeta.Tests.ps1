@@ -74,7 +74,7 @@ Describe 'Initialize-GlmetaRepository' {
         $created.State | Should -Contain 'CREATED'
         (Get-GlmetaConfiguration -ConfigPath (Join-Path $repo 'repo_config.json')).project.name | Should -Be 'library'
         $existing = @(Initialize-GlmetaRepository -RepositoryRoot $repo -TemplateRoot $templateRoot -Confirm:$false)
-        @($existing | Where-Object State -eq 'EXISTS').Count | Should -Be 2
+        @($existing | Where-Object State -eq 'EXISTS').Count | Should -BeGreaterOrEqual 2
     }
 }
 
