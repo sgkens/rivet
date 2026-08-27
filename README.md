@@ -14,24 +14,24 @@ Rivet is an automation engine for JavaScript repository metadata, SemVer calcula
 
 ## Features
 
-■ **Conventional Commit SemVer Engine**: Computes exact semantic version increments (`major`, `minor`, `patch`, or `none`) from commit histories using Conventional Commit standards.
-■ **Manifest Synchronization**: Synchronizes version identities atomically across `package.json`, `jsr.jsonc`, and `package-lock.json`.
-■ **Clean `.rivet/` Architecture**: Consolidates operational files (`.rivet/repo_config.json`, `.rivet/repo_meta.json`, `.rivet/mr.md`, `.rivet/work-items/*.md`) into a single isolated directory while retaining backwards-compatible root fallback.
-■ **Work Items & Issue Synchronization**: Bidirectionally synchronizes local structured Markdown work items (`.rivet/work-items/<iid>-<slug>.md`) with GitLab Issues REST API (`pull`, `push`, `list`, `new`).
-■ **Generic Completion Report Card**: Renders detailed ASCII TUI completion report cards with orange-to-offblack gradient borders, responsive layout, paragraph wrapping, and `-Raw` programmatic output switch for compound workflows (`[MA]`).
-■ **Runtime Template Initialization**: Scaffolds Node.js/npm and Bun environments (`bunfig.toml`, `bun.lock`) while maintaining `package.json` as the canonical package and script definition.
-■ **Comprehensive Diagnostics (`doctor`)**: Validates PowerShell version, Git installation, worktree integrity, Git identity (`user.name`/`user.email`), runtime engines (`node`/`bun`), manifest parity, lockfile presence, configuration health, and README heading contracts.
-■ **Automated Merge Request Management**: Formats table-based merge request documents (`mr.md`), calculates release types in MR titles (`Release (<type>) <Project> <Version>`), creates/updates GitLab MRs, and writes back MR IIDs and web links.
-■ **Changelog & Release Notes Generation**: Rebuilds release notes from Git tag histories or localized ranges, formatting Conventional Commits into categorized sections with linked hashes and GitLab author references.
-■ **Interactive Flow Graph Visualization**: Renders ASCII diagrams of the complete Rivet release and automation lifecycle.
-■ **Static Site Generator Integration**: Exports structured data (`docs/data/changelog.json` and `docs/data/releases.json`) consumable by Hugo, Eleventy (11ty), and Jekyll.
-■ **Responsive Terminal User Interface (TUI)**: Features an alternate-screen interactive menu (`smenu.ps1`) with layout auto-detection (wide dual-column vs narrow stacked), multi-action indicators (`[MA]`), and truecolor ANSI rendering.
+- **Conventional Commit SemVer Engine**: Computes exact semantic version increments (`major`, `minor`, `patch`, or `none`) from commit histories using Conventional Commit standards.
+- **Manifest Synchronization**: Synchronizes version identities atomically across `package.json`, `jsr.jsonc`, and `package-lock.json`.
+- **Clean `.rivet/` Architecture**: Consolidates operational files (`.rivet/repo_config.json`, `.rivet/repo_meta.json`, `.rivet/mr.md`, `.rivet/work-items/*.md`) into a single isolated directory while retaining backwards-compatible root fallback.
+- **Work Items & Issue Synchronization**: Bidirectionally synchronizes local structured Markdown work items (`.rivet/work-items/<iid>-<slug>.md`) with GitLab Issues REST API (`pull`, `push`, `list`, `new`).
+- **Generic Completion Report Card**: Renders detailed ASCII TUI completion report cards with orange-to-offblack gradient borders, responsive layout, paragraph wrapping, and `-Raw` programmatic output switch for compound workflows (`[MA]`).
+- **Runtime Template Initialization**: Scaffolds Node.js/npm and Bun environments (`bunfig.toml`, `bun.lock`) while maintaining `package.json` as the canonical package and script definition.
+- **Comprehensive Diagnostics (`doctor`)**: Validates PowerShell version, Git installation, worktree integrity, Git identity (`user.name`/`user.email`), runtime engines (`node`/`bun`), manifest parity, lockfile presence, configuration health, and README heading contracts.
+- **Automated Merge Request Management**: Formats table-based merge request documents (`mr.md`), calculates release types in MR titles (`Release (<type>) <Project> <Version>`), creates/updates GitLab MRs, and writes back MR IIDs and web links.
+- **Changelog & Release Notes Generation**: Rebuilds release notes from Git tag histories or localized ranges, formatting Conventional Commits into categorized sections with linked hashes and GitLab author references.
+- **Interactive Flow Graph Visualization**: Renders ASCII diagrams of the complete Rivet release and automation lifecycle.
+- **Static Site Generator Integration**: Exports structured data (`docs/data/changelog.json` and `docs/data/releases.json`) consumable by Hugo, Eleventy (11ty), and Jekyll.
+- **Responsive Terminal User Interface (TUI)**: Features an alternate-screen interactive menu (`smenu.ps1`) with layout auto-detection (wide dual-column vs narrow stacked), multi-action indicators (`[MA]`), and truecolor ANSI rendering.
 
 ## Installation in consuming repositories
 
 Add `rivet.ps1` to the consuming repository root and add `/rivet/` to `.gitignore`. The launcher clones `https://gitlab.com/staticcanvas/rivet.git` on first invocation (or the repository specified by the `RIVET_REPOSITORY_URL` environment variable) and forwards all parameters with the repository root explicitly bound.
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 doctor
 ./rivet.ps1 menu
 ./rivet.ps1 prep-release -DryRun
@@ -39,7 +39,7 @@ Add `rivet.ps1` to the consuming repository root and add `/rivet/` to `.gitignor
 
 Direct module invocation in development environments:
 
-```powershell {title="rivet/run.ps1"}
+```powershell
 ./rivet/run.ps1 -RepositoryRoot $PWD status
 ```
 
@@ -57,21 +57,21 @@ When `-Bun` is supplied (or when `bunfig.toml` or `bun.lock` is detected), initi
 
 Initialize default npm configuration:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 init -DryRun
 ./rivet.ps1 init
 ```
 
 Initialize Bun configuration:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 init -Bun -DryRun
 ./rivet.ps1 init -Bun
 ```
 
 Initialize configuration and apply GitLab project metadata:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 bootstrap -DryRun
 ./rivet.ps1 bootstrap
 ```
@@ -94,13 +94,13 @@ Executing `run.ps1` without explicit action switches runs the default metadata m
 
 Execute default metadata maintenance:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1
 ```
 
 Preview metadata updates without writing files:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -DryRun
 ./rivet.ps1 readme
 ```
@@ -137,7 +137,7 @@ The `[MA]` suffix denotes compound workflows executing multiple underlying opera
 
 Launch the interactive command center:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 menu
 ./rivet.ps1 -Menu
 ```
@@ -160,19 +160,19 @@ Passing `-Commit` opens the patch review workflow and automatically stages modif
 
 Preview release preparation:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 prep-release -DryRun
 ```
 
 Apply release preparation:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 prep-release
 ```
 
 Apply release preparation and review commit:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 prep-release -Commit
 ```
 
@@ -198,19 +198,19 @@ If local commits are ahead of upstream, the branch and new tag are pushed atomic
 
 Preview production tag creation:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -Tag -DryRun
 ```
 
 Preview validation snapshot tag creation:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -Tag -Snapshot -DryRun
 ```
 
 Create and push an explicit version tag:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -Tag -TagVersion 1.2.0
 ```
 
@@ -226,7 +226,7 @@ Rivet provides three read-only diagnostic and inspection commands:
 
 ### Strict reference
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 doctor
 ./rivet.ps1 status
 ./rivet.ps1 version
@@ -251,13 +251,13 @@ Output includes repository status headers and summary statistics (total commits,
 
 Display default history (latest 25 commits):
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -glo
 ```
 
 Display custom commit count across all refs excluding merges:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -glo -GitLogCount 50 -GitLogAll -GitLogNoMerges
 ```
 
@@ -278,13 +278,13 @@ Passing `-Commit` initiates an interactive commit workflow using `Show-SMenu` wi
 
 Interactive commit workflow:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -Commit
 ```
 
 Automated non-interactive commit execution:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 `
   -SkipVersion `
   -SkipReadmeMetadata `
@@ -312,19 +312,19 @@ Release documentation generation parses commits after the latest reachable GitLa
 
 Preview draft changelog updates:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -UpdateReleaseDocs -DryRun
 ```
 
 Finalize release documentation with explicit version and baseline:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -FinalizeRelease -ReleaseVersion 1.2.0 -FromTag v1.1.0
 ```
 
 Rebuild entire changelog history across all tags:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 rebuild-changelog -DryRun
 ./rivet.ps1 rebuild-changelog
 ```
@@ -360,20 +360,20 @@ The document header uses structured key-value tables:
 
 Update local `mr.md` document:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -UpdateMergeRequest
 ```
 
 Create GitLab merge request and write back IID:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -UpdateMergeRequest -CreateGitLabMergeRequest -DryRun
 ./rivet.ps1 -UpdateMergeRequest -CreateGitLabMergeRequest
 ```
 
 Update existing GitLab merge request:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -UpdateMergeRequest -UpdateGitLabMergeRequest
 ```
 
@@ -390,20 +390,20 @@ Synchronizes remote GitLab project description, topics, and label taxonomies usi
 
 Preview GitLab metadata synchronization:
 
-```powershell {title="rivet.ps1"}
+```powershell
 $env:GITLAB_API_KEY = '<token>'
 ./rivet.ps1 -SyncGitLabMetadata -DryRun
 ```
 
 Apply GitLab metadata synchronization:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -SyncGitLabMetadata
 ```
 
 Apply metadata synchronization and purge unmanaged remote labels:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 -SyncGitLabMetadata -DeleteMissingLabels
 ```
 
@@ -472,46 +472,46 @@ Provide automatic dual-column layout on wide terminals.
 
 List all local tasks / work items:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 tasks
 ./rivet.ps1 work-items
 ```
 
 View a specific work item in terminal:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 work-items -View -Iid 42
 ```
 
 Close or reopen an issue locally:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 work-items -Close -Iid 42
 ./rivet.ps1 work-items -Reopen -Iid 42
 ```
 
 Scaffold a new local work item template targeting issue #42:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 work-items -Template -Iid 42 -IssueTitle 'Add completion report card' -IssueLabels 'feature','ui'
 ```
 
 Pull only a specific issue (#42) from GitLab:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 work-items -PullIssues -Iid 42
 ```
 
 Push modified local work items marked with `Sync Action: push`:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 work-items -PushIssues -DryRun
 ./rivet.ps1 work-items -PushIssues
 ```
 
 Regenerate aggregated task tracker dashboard:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 tasklist
 ./rivet.ps1 work-items -GenerateList
 ```
@@ -555,13 +555,13 @@ Rivet implements a zero-tear ASCII TUI completion report card (`Write-RivetRepor
 
 Execute release preparation with formatted visual report card:
 
-```powershell {title="rivet.ps1"}
+```powershell
 ./rivet.ps1 prep-release -DryRun
 ```
 
 Execute release preparation in silent raw data mode:
 
-```powershell {title="rivet.ps1"}
+```powershell
 $result = ./rivet.ps1 prep-release -Raw -DryRun
 $result.Success
 $result.Rows
