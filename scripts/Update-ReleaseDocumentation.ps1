@@ -376,6 +376,9 @@ $notesEnd
     $changelogBlock = "$changelogStart`n`n$generatedBody`n`n$changelogEnd".Replace("`n", $lineEnding)
     $changelogPattern = '(?ms)<!-- (?:rivet|glmeta):changelog:start -->\s*(?<body>.*?)\s*<!-- (?:rivet|glmeta):changelog:end -->'
     $heading = if ($Finalize) { "## [$Version]" } else { '## [Unreleased]' }
+    $unreleasedHeadingPattern = '(?m)^## \[Unreleased\][ \t]*$'
+    $targetHeadingPattern = "(?m)^(?<heading>$([regex]::Escape($heading))[ \t]*(?:\r?\n\r?\n> \d{4}-\d{2}-\d{2})?)[ \t]*$"
+
     $markerMatch = [regex]::Match($changelog, $changelogPattern)
     $headingMatch = [regex]::Match($changelog, "(?m)^$([regex]::Escape($heading))[ \t]*$")
     $markerInTargetSection = $false
@@ -384,9 +387,11 @@ $notesEnd
         $nextHeading = $releaseHeadingRegex.Match($changelog, $headingMatch.Index + $headingMatch.Length)
         $markerInTargetSection = $markerMatch.Index -gt $headingMatch.Index -and (-not $nextHeading.Success -or $markerMatch.Index -lt $nextHeading.Index)
     }
+
     if ($markerMatch.Success -and $markerInTargetSection) {
         $updatedChangelog = [regex]::Replace($changelog, $changelogPattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($match) [void]$match; $changelogBlock }, 1)
     } else {
+        # Strip markers from previous location
         $baseChangelog = if ($markerMatch.Success) {
             [regex]::Replace(
                 $changelog,
@@ -398,20 +403,25 @@ $notesEnd
                 1
             )
         } else { $changelog }
-        $headingPattern = "(?m)^(?<heading>$([regex]::Escape($heading))[ \t]*(?:\r?\n\r?\n> \d{4}-\d{2}-\d{2})?)[ \t]*$"
-        if (-not [regex]::IsMatch($baseChangelog, $headingPattern)) {
+
+        if ($Finalize -and [regex]::IsMatch($baseChangelog, $unreleasedHeadingPattern)) {
+            # Finalize replaces ## [Unreleased] in-place with ## [Version] + date + notes
+            $dateLine = "`n`n> $([DateTime]::Today.ToString('yyyy-MM-dd'))"
+            $replacement = "$heading$dateLine`n`n$changelogBlock"
+            $updatedChangelog = [regex]::Replace($baseChangelog, $unreleasedHeadingPattern, $replacement.Replace("`n", $lineEnding), 1)
+        } elseif ([regex]::IsMatch($baseChangelog, $targetHeadingPattern)) {
+            $updatedChangelog = [regex]::Replace(
+                $baseChangelog,
+                $targetHeadingPattern,
+                [System.Text.RegularExpressions.MatchEvaluator]{ param($match) $match.Groups['heading'].Value + $lineEnding + $lineEnding + $changelogBlock },
+                1
+            )
+        } else {
             $dateLine = if ($Finalize) { "`n`n> $([DateTime]::Today.ToString('yyyy-MM-dd'))" } else { '' }
             $insertion = "$heading$dateLine`n`n$changelogBlock`n`n"
             $firstRelease = [regex]::Match($baseChangelog, '(?m)^## \[')
             if (-not $firstRelease.Success) { throw 'No changelog release heading was found.' }
             $updatedChangelog = $baseChangelog.Insert($firstRelease.Index, $insertion.Replace("`n", $lineEnding))
-        } else {
-            $updatedChangelog = [regex]::Replace(
-                $baseChangelog,
-                $headingPattern,
-                [System.Text.RegularExpressions.MatchEvaluator]{ param($match) $match.Groups['heading'].Value + $lineEnding + $lineEnding + $changelogBlock },
-                1
-            )
         }
     }
 
@@ -502,6 +512,23 @@ $notesEnd
                 entries = @($markdownEntries)
                 included = $markdownEntries.Count
                 excluded_non_version_bump = if ($isCurrent) { $commitsIncludedInMarkdown - $jsonEntries.Count } else { 0 }
+            })
+        }
+        $hasUnreleasedInVersions = $false
+        foreach ($v in $versions) {
+            if ($v.version -eq 'unreleased') { $hasUnreleasedInVersions = $true; break }
+        }
+        if (-not $hasUnreleasedInVersions -and $existingByVersion.ContainsKey('unreleased')) {
+            $versions.Add($existingByVersion['unreleased'])
+        } elseif (-not $hasUnreleasedInVersions) {
+            $versions.Add([ordered]@{
+                version = 'unreleased'
+                date = $null
+                from = if ($Finalize) { "v$Version" } else { $FromTag }
+                to = $headHash
+                entries = @()
+                included = 0
+                excluded_non_version_bump = 0
             })
         }
         $jsonDocument = [ordered]@{
