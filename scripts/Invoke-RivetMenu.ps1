@@ -131,14 +131,40 @@ function Invoke-RivetMenu {
         $workflowTimer = [System.Diagnostics.Stopwatch]::StartNew()
         $workflowState = 'COMPLETE'
         $isHelpWorkflow = $Parameters.Contains('Help') -and [bool]$Parameters.Help
-        $workflowOutput = @()
-        $prevColor = $env:FORCE_COLOR
+        $argList = [System.Collections.Generic.List[string]]::new()
+        $argList.Add('-RepositoryRoot')
+        $argList.Add($repositoryRoot)
+        foreach ($key in $Parameters.Keys) {
+            $value = $Parameters[$key]
+            if ($value -is [bool]) {
+                if ($value) {
+                    $argList.Add("-$key")
+                } else {
+                    $argList.Add("-${key}:`$false")
+                }
+            } elseif ($value -is [System.Collections.IEnumerable] -and -not ($value -is [string])) {
+                $arrayItems = @($value | ForEach-Object { [string]$_ })
+                if ($arrayItems.Count -gt 0) {
+                    $argList.Add("-$key")
+                    $argList.Add(($arrayItems -join ','))
+                }
+            } else {
+                $argList.Add("-$key")
+                $argList.Add([string]$value)
+            }
+        }
+
+        $isInteractive = ($Parameters.Contains('Commit') -and [bool]$Parameters.Commit -and -not ($Parameters.Contains('DryRun') -and [bool]$Parameters.DryRun))
         try {
             # Keep workflow module imports outside the active TUI process.
             # Re-importing Rivet while this function runs invalidates its local
             # menu functions when control returns from the workflow.
             $env:FORCE_COLOR = '1'
-            $workflowOutput = @(& pwsh -NoLogo -NoProfile -File $resolvedRunner -RepositoryRoot $repositoryRoot @Parameters 2>&1 | ForEach-Object { [string]$_ })
+            if ($isInteractive) {
+                & pwsh -NoLogo -NoProfile -File $resolvedRunner @argList
+            } else {
+                $workflowOutput = @(& pwsh -NoLogo -NoProfile -File $resolvedRunner @argList 2>&1 | ForEach-Object { [string]$_ })
+            }
             if ($LASTEXITCODE -ne 0) {
                 throw "Rivet workflow exited with code $LASTEXITCODE."
             }
@@ -152,6 +178,34 @@ function Invoke-RivetMenu {
 
         if ($isHelpWorkflow -and $workflowState -eq 'COMPLETE') {
             Show-RivetPager -Title 'RIVET HELP' -Lines ([string[]]$workflowOutput)
+            return
+        }
+
+        if ($isInteractive) {
+            [Console]::WriteLine('')
+            $elapsed = Get-ElapsedTime -TimeSpan $workflowTimer.Elapsed
+            $resultColor = if ($workflowState -eq 'COMPLETE') { @(80, 220, 150) } else { @(255, 90, 105) }
+            $resultLines = @(
+                (Format-AnsiText -Text "$workflowState  $elapsed" -Color $resultColor -Bold)
+                (Format-AnsiText -Text 'Press [Esc] or [q] to return to the command center.' -Color @(145, 155, 175))
+            )
+            $resultWidth = [Math]::Max(30, [Math]::Min(132, ([Console]::WindowWidth - 2)))
+            [Console]::WriteLine((New-TuiPanel -Content $resultLines -Title 'WORKFLOW RESULT' -Width $resultWidth -BorderStyle Rounded -ColorPalette @{ Border = @(48, 58, 78); Title = $resultColor }))
+
+            while ($true) {
+                $k = [Console]::ReadKey($true)
+                if ($k.Key -eq 'Escape') {
+                    [System.Threading.Thread]::Sleep(15)
+                    if ([Console]::KeyAvailable) {
+                        while ([Console]::KeyAvailable) { $null = [Console]::ReadKey($true) }
+                        continue
+                    }
+                    break
+                }
+                if ($k.Key -in @('Enter', 'LeftArrow') -or $k.KeyChar -in @('q', 'Q', 'h', 'H', ' ')) {
+                    break
+                }
+            }
             return
         }
 
