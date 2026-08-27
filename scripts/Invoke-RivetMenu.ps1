@@ -154,7 +154,10 @@ function Invoke-RivetMenu {
             }
         }
 
-        $isInteractive = ($Parameters.Contains('Commit') -and [bool]$Parameters.Commit -and -not ($Parameters.Contains('DryRun') -and [bool]$Parameters.DryRun))
+        $isInteractive = (
+            ($Parameters.Contains('Commit') -and [bool]$Parameters.Commit -and -not ($Parameters.Contains('DryRun') -and [bool]$Parameters.DryRun)) -or
+            ($Parameters.Contains('Tag') -and [bool]$Parameters.Tag -and -not ($Parameters.Contains('DryRun') -and [bool]$Parameters.DryRun))
+        )
         try {
             # Keep workflow module imports outside the active TUI process.
             # Re-importing Rivet while this function runs invalidates its local
