@@ -55,14 +55,14 @@ function Get-SMenuLayout {
 
     $frameWidth = [Math]::Max(22, [Math]::Min(132, $TerminalWidth - 2))
     $contentWidth = [Math]::Max(16, $frameWidth - 4)
-    $wide = $contentWidth -ge 76
+    $wide = $contentWidth -ge 56
     $reservedRows = if ($wide -and ($DescriptionDisplay -in @('Card', 'Pager'))) { 6 } elseif ($wide) { 8 } else { 11 }
     $visibleItems = [Math]::Max(3, [Math]::Min([Math]::Min($ViewSize, $ItemCount), $TerminalHeight - $reservedRows))
 
     $labelWidth = if ($DescriptionDisplay -eq 'Minimal') {
         $contentWidth - 4
     } elseif ($DescriptionDisplay -in @('Card', 'Pager') -and $wide) {
-        [Math]::Max(24, [int][Math]::Floor($contentWidth * 0.44))
+        [Math]::Max(20, [int][Math]::Floor($contentWidth * 0.42))
     } elseif ($wide) {
         [Math]::Max(20, [int][Math]::Floor($contentWidth * 0.38))
     } else {
@@ -70,13 +70,13 @@ function Get-SMenuLayout {
     }
 
     $cardWidth = if ($wide -and ($DescriptionDisplay -in @('Card', 'Pager'))) {
-        [Math]::Max(24, $contentWidth - $labelWidth - 3)
+        [Math]::Max(20, $contentWidth - $labelWidth - 3)
     } else {
         $contentWidth - 2
     }
 
     $descriptionWidth = if ($wide -and $DescriptionDisplay -eq 'Inline') {
-        [Math]::Max(20, $contentWidth - $labelWidth - 5)
+        [Math]::Max(18, $contentWidth - $labelWidth - 5)
     } else {
         $contentWidth - 4
     }
@@ -250,10 +250,17 @@ function Show-SMenu {
             [void]$builder.AppendLine("$leftVert$detailLine$rightVert")
 
             $detailLines = @(Split-SMenuText -Text $selectedDesc -Width ([Math]::Max(8, $inner - 4)))
-            $detailRows = if ($currentDisplayMode -eq 'Minimal') { 1 } else { [Math]::Min(3, [Math]::Max(1, $detailLines.Count)) }
+            $detailRows = if ($currentDisplayMode -eq 'Minimal') {
+                1
+            } elseif ($currentDisplayMode -eq 'Pager') {
+                [Math]::Min(5, [Math]::Max(1, $detailLines.Count))
+            } else {
+                [Math]::Min(3, [Math]::Max(1, $detailLines.Count))
+            }
 
             for ($index = 0; $index -lt $detailRows; $index++) {
-                $detailText = if ($index -lt $detailLines.Count) { $detailLines[$index] } else { '' }
+                $lineIdx = if ($currentDisplayMode -eq 'Pager') { $pagerOffset + $index } else { $index }
+                $detailText = if ($lineIdx -lt $detailLines.Count) { $detailLines[$lineIdx] } else { '' }
                 $detail = Pad-AnsiString -Text "$($colors.Muted)  $detailText$($colors.Reset)" -Width $inner -Align Left -Truncate
                 [void]$builder.AppendLine("$leftVert$detail$rightVert")
             }
