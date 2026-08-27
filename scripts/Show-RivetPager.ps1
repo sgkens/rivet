@@ -75,8 +75,13 @@ function Show-RivetPager {
             [Console]::Write("$esc[H$($frame.ToString())$esc[J")
 
             while (-not [Console]::KeyAvailable) {
-                Start-Sleep -Milliseconds 40
-                if ([Console]::WindowWidth -ne $width -or [Console]::WindowHeight -ne $height) { break }
+                [System.Threading.Thread]::Sleep(20)
+                $curW = try { [Console]::WindowWidth } catch { $width }
+                $curH = try { [Console]::WindowHeight } catch { $height }
+                if ($curW -ne $width -or $curH -ne $height) {
+                    [Console]::Write("$esc[2J$esc[3J$esc[H")
+                    break
+                }
             }
             if (-not [Console]::KeyAvailable) { continue }
 

@@ -305,13 +305,21 @@ function Show-SMenu {
             if ($size.Width -ne $lastWidth -or $size.Height -ne $lastHeight) {
                 $lastWidth = $size.Width
                 $lastHeight = $size.Height
+                # Fully clear alternate buffer canvas to prevent ghost borders when shrinking or expanding
+                [Console]::Write("$esc[2J$esc[3J$esc[H")
                 $needsRedraw = $true
             }
             if ($needsRedraw) { Write-Frame -Size $size; $needsRedraw = $false }
-            if (-not [Console]::KeyAvailable) {
-                [System.Threading.Thread]::Sleep(40)
-                continue
+
+            while (-not [Console]::KeyAvailable) {
+                [System.Threading.Thread]::Sleep(20)
+                $pollSize = Get-SMenuTerminalSize
+                if ($pollSize.Width -ne $lastWidth -or $pollSize.Height -ne $lastHeight) {
+                    $needsRedraw = $true
+                    break
+                }
             }
+            if ($needsRedraw) { continue }
             $key = [Console]::ReadKey($true)
             $kChar = $key.KeyChar
 
