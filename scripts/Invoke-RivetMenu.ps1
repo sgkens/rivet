@@ -63,9 +63,15 @@ function Invoke-RivetMenu {
     function Select-YesNo {
         param([string]$Title, [bool]$Default = $false)
         $items = if ($Default) {
-            @((New-MenuItem 'Yes' $true), (New-MenuItem 'No' $false))
+            @(
+                (New-MenuItem 'Yes' $true 'Confirm and enable this option for the workflow.')
+                (New-MenuItem 'No' $false 'Skip and proceed with this option disabled.')
+            )
         } else {
-            @((New-MenuItem 'No' $false), (New-MenuItem 'Yes' $true))
+            @(
+                (New-MenuItem 'No' $false 'Skip and proceed with this option disabled.')
+                (New-MenuItem 'Yes' $true 'Confirm and enable this option for the workflow.')
+            )
         }
         return Select-MenuValue -Title $Title -Items $items
     }
@@ -123,8 +129,8 @@ function Invoke-RivetMenu {
         [Console]::WriteLine((New-TuiPanel -Content $reviewLines.ToArray() -Title 'COMMAND REVIEW' -Width $reviewWidth -BorderStyle Rounded -ColorPalette @{ Border = @(48, 58, 78); Title = @(0, 210, 255) }))
         [Console]::WriteLine('')
         $runChoice = Select-MenuValue -Title 'RUN THIS WORKFLOW?' -Items @(
-            (New-MenuItem 'Run command' 'run' 'execute the reviewed parameters')
-            (New-MenuItem 'Back' 'back' 'return without running')
+            (New-MenuItem 'Run command' 'run' 'Execute the reviewed command line arguments immediately and stream live execution output.')
+            (New-MenuItem 'Back' 'back' 'Cancel execution and return to the previous workflow menu without applying changes.')
         )
         if ($runChoice -ne 'run') { return }
         [Console]::Clear()
@@ -256,8 +262,8 @@ function Invoke-RivetMenu {
 
     function Select-PreviewMode([System.Collections.IDictionary]$Parameters) {
         $mode = Select-MenuValue -Title 'EXECUTION MODE' -Items @(
-            (New-MenuItem 'Preview only' 'preview' 'recommended; do not write changes')
-            (New-MenuItem 'Apply changes' 'apply' 'write the selected changes')
+            (New-MenuItem 'Preview only' 'preview' 'Performs a non-destructive dry-run simulation without writing file changes or publishing remote updates.')
+            (New-MenuItem 'Apply changes' 'apply' 'Applies all calculated changes directly to repository files, manifests, and remote targets.')
         )
         if ($null -eq $mode) { return $false }
         if ($mode -eq 'preview') { $Parameters.DryRun = $true }
