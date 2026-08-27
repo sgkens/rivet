@@ -71,8 +71,16 @@ function Invoke-RivetMenu {
     }
 
     function Read-OptionalValue([string]$Label, [string]$Default = '') {
-        $prompt = if ([string]::IsNullOrWhiteSpace($Default)) { "$Label [optional]" } else { "$Label [$Default]" }
-        $value = Read-Host $prompt
+        [Console]::WriteLine('')
+        $promptLabel = Format-AnsiText -Text "▶ $Label" -Color @(0, 200, 255) -Bold
+        $defaultHint = if ([string]::IsNullOrWhiteSpace($Default)) {
+            Format-AnsiText -Text ' (optional, press enter to skip)' -Color @(145, 155, 175)
+        } else {
+            Format-AnsiText -Text " (default: $Default, press enter to accept)" -Color @(145, 155, 175)
+        }
+        [Console]::WriteLine("$promptLabel$defaultHint")
+        $value = Read-Host -Prompt '  > '
+        [Console]::WriteLine('')
         if ([string]::IsNullOrWhiteSpace($value)) { return $Default }
         return $value.Trim()
     }
@@ -129,7 +137,13 @@ function Invoke-RivetMenu {
             # Re-importing Rivet while this function runs invalidates its local
             # menu functions when control returns from the workflow.
             if ($isHelpWorkflow) {
-                $workflowOutput = @(& pwsh -NoLogo -NoProfile -File $resolvedRunner -RepositoryRoot $repositoryRoot @Parameters 2>&1)
+                $prevColor = $env:FORCE_COLOR
+                try {
+                    $env:FORCE_COLOR = '1'
+                    $workflowOutput = @(& pwsh -NoLogo -NoProfile -File $resolvedRunner -RepositoryRoot $repositoryRoot @Parameters 2>&1)
+                } finally {
+                    $env:FORCE_COLOR = $prevColor
+                }
             } else {
                 & pwsh -NoLogo -NoProfile -File $resolvedRunner -RepositoryRoot $repositoryRoot @Parameters
             }
@@ -151,11 +165,25 @@ function Invoke-RivetMenu {
         $resultColor = if ($workflowState -eq 'COMPLETE') { @(80, 220, 150) } else { @(255, 90, 105) }
         $resultLines = @(
             (Format-AnsiText -Text "$workflowState  $elapsed" -Color $resultColor -Bold)
-            (Format-AnsiText -Text 'Press any key to return to the command center.' -Color @(145, 155, 175))
+            (Format-AnsiText -Text 'Press [Esc] or [q] to return to the command center.' -Color @(145, 155, 175))
         )
         $resultWidth = [Math]::Max(30, [Math]::Min(132, ([Console]::WindowWidth - 2)))
         [Console]::WriteLine((New-TuiPanel -Content $resultLines -Title 'WORKFLOW RESULT' -Width $resultWidth -BorderStyle Rounded -ColorPalette @{ Border = @(48, 58, 78); Title = $resultColor }))
-        $null = [Console]::ReadKey($true)
+
+        while ($true) {
+            $k = [Console]::ReadKey($true)
+            if ($k.Key -eq 'Escape') {
+                [System.Threading.Thread]::Sleep(15)
+                if ([Console]::KeyAvailable) {
+                    while ([Console]::KeyAvailable) { $null = [Console]::ReadKey($true) }
+                    continue
+                }
+                break
+            }
+            if ($k.Key -in @('Enter', 'LeftArrow') -or $k.KeyChar -in @('q', 'Q', 'h', 'H', ' ')) {
+                break
+            }
+        }
     }
 
     function Select-PreviewMode([System.Collections.IDictionary]$Parameters) {
@@ -200,11 +228,13 @@ function Invoke-RivetMenu {
         (New-MenuItem 'Merge request' 'merge_request' 'generate the managed mr.md document' -MultiAction)
         (New-MenuItem 'GitLab metadata' 'gitlab' 'description, topics, and labels')
         (New-MenuItem 'Conventional Commit' 'commit' 'review and submit repository changes' -MultiAction)
+        (New-MenuItem 'Work items & tasks' 'work_items' 'list, view, scaffold, pull, push, and index tasks' -MultiAction)
         (New-MenuItem 'Tag and publish' 'tag' 'snapshot checkpoint or production release')
         (New-MenuItem 'Git history' 'history' 'detailed enriched one-line log')
         (New-MenuItem 'Repository status' 'status' 'version, upstream, worktree, and next tags')
         (New-MenuItem 'Version report' 'version_report' 'explain baseline and bump inputs')
         (New-MenuItem 'Doctor' 'doctor' 'validate dependencies and configuration')
+        (New-MenuItem 'Pipeline flow graph' 'flow' 'visualize the Rivet automation and release lifecycle')
         (New-MenuItem 'Help' 'help' 'manual and parameter knowledge')
         (New-MenuItem 'Exit' 'exit')
     )
@@ -220,12 +250,22 @@ function Invoke-RivetMenu {
             'init' {
                 $kind = Select-MenuValue -Title 'INITIALIZE REPOSITORY' -Items @(
                     (New-MenuItem 'Local configuration' 'local' 'create or validate root configuration only')
+                    (New-MenuItem 'Local configuration (Bun)' 'local_bun' 'create configuration including bunfig.toml and bun.lock')
                     (New-MenuItem 'Configuration and GitLab' 'gitlab' 'initialize then synchronize project metadata' -MultiAction)
+                    (New-MenuItem 'Configuration and GitLab (Bun)' 'gitlab_bun' 'initialize Bun repository then sync project metadata' -MultiAction)
                 )
                 if ($null -eq $kind) { continue }
-                $p = if ($kind -eq 'gitlab') { [ordered]@{ Bootstrap = $true } } else { [ordered]@{ Init = $true } }
+                $isBun = $kind -in @('local_bun', 'gitlab_bun')
+                $isGitlab = $kind -in @('gitlab', 'gitlab_bun')
+                $p = if ($isGitlab) { [ordered]@{ Bootstrap = $true } } else { [ordered]@{ Init = $true } }
+                if ($isBun) { $p.Bun = $true }
                 if (-not (Select-PreviewMode $p)) { continue }
-                Invoke-ReviewedWorkflow -Title $(if ($kind -eq 'gitlab') { 'Initialize repository and GitLab metadata' } else { 'Initialize repository configuration' }) -Parameters $p
+                $titleText = if ($isGitlab) {
+                    if ($isBun) { 'Initialize Bun repository and GitLab metadata' } else { 'Initialize repository and GitLab metadata' }
+                } else {
+                    if ($isBun) { 'Initialize Bun repository configuration' } else { 'Initialize repository configuration' }
+                }
+                Invoke-ReviewedWorkflow -Title $titleText -Parameters $p
             }
             'prep_release' {
                 $kind = Select-MenuValue -Title 'PREP RELEASE' -Items @(
@@ -370,6 +410,108 @@ function Invoke-RivetMenu {
             'status' { Invoke-ReviewedWorkflow -Title 'Repository status' -Parameters ([ordered]@{ Status = $true }) }
             'version_report' { Invoke-ReviewedWorkflow -Title 'Version explanation' -Parameters ([ordered]@{ VersionReport = $true }) }
             'doctor' { Invoke-ReviewedWorkflow -Title 'Repository diagnostics' -Parameters ([ordered]@{ Doctor = $true }) }
+            'flow' { Invoke-ReviewedWorkflow -Title 'Pipeline flow graph' -Parameters ([ordered]@{ FlowGraph = $true }) }
+            'work_items' {
+                $taskAction = Select-MenuValue -Title 'WORK ITEMS & TASK MANAGEMENT' -Items @(
+                    (New-MenuItem 'List tasks' 'list' 'render overview table of local work items')
+                    (New-MenuItem 'View task details' 'view' 'inspect full description and criteria for an issue')
+                    (New-MenuItem 'Scaffold new work item' 'new' 'create markdown template with metadata table')
+                    (New-MenuItem 'Close task' 'close' 'mark closed and flag for push synchronization')
+                    (New-MenuItem 'Reopen task' 'reopen' 'mark open and flag for push synchronization')
+                    (New-MenuItem 'Pull from GitLab' 'pull' 'fetch remote issues and discussion notes into local markdown')
+                    (New-MenuItem 'Push to GitLab' 'push' 'publish local changes to GitLab issue tracker' -MultiAction)
+                    (New-MenuItem 'Regenerate tasklist' 'generate_list' 'rebuild the aggregated workitems-list.md dashboard')
+                )
+                if ($null -eq $taskAction) { continue }
+                $p = [ordered]@{}
+                switch ($taskAction) {
+                    'list' {
+                        $p.WorkItems = $true
+                        $p.ListIssues = $true
+                        Invoke-ReviewedWorkflow -Title 'List local work items' -Parameters $p
+                    }
+                    'view' {
+                        $iidText = Read-OptionalValue 'Issue IID to view'
+                        $iid = 0
+                        if (-not [int]::TryParse($iidText, [ref]$iid) -or $iid -le 0) {
+                            [Console]::WriteLine((Format-AnsiText -Text 'Valid issue IID is required.' -Color @(255, 90, 105) -Bold))
+                            $null = [Console]::ReadKey($true)
+                            continue
+                        }
+                        $p.WorkItems = $true
+                        $p.ViewIssue = $true
+                        $p.IssueIid = $iid
+                        Invoke-ReviewedWorkflow -Title "View work item #$iid" -Parameters $p
+                    }
+                    'new' {
+                        $title = Read-OptionalValue 'Issue title'
+                        if ([string]::IsNullOrWhiteSpace($title)) {
+                            [Console]::WriteLine((Format-AnsiText -Text 'Issue title is required.' -Color @(255, 90, 105) -Bold))
+                            $null = [Console]::ReadKey($true)
+                            continue
+                        }
+                        $p.WorkItems = $true
+                        $p.NewIssue = $true
+                        $p.IssueTitle = $title
+                        $iidText = Read-OptionalValue 'GitLab IID (optional; 0 for new local item)' '0'
+                        $iid = 0
+                        if ([int]::TryParse($iidText, [ref]$iid) -and $iid -gt 0) { $p.IssueIid = $iid }
+                        $labelsText = Read-OptionalValue 'Comma-separated labels (e.g. feature, ui)'
+                        if (-not [string]::IsNullOrWhiteSpace($labelsText)) {
+                            $p.IssueLabels = @($labelsText.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+                        }
+                        Invoke-ReviewedWorkflow -Title "Scaffold work item: $title" -Parameters $p
+                    }
+                    'close' {
+                        $iidText = Read-OptionalValue 'Issue IID to close'
+                        $iid = 0
+                        if (-not [int]::TryParse($iidText, [ref]$iid) -or $iid -le 0) {
+                            [Console]::WriteLine((Format-AnsiText -Text 'Valid issue IID is required.' -Color @(255, 90, 105) -Bold))
+                            $null = [Console]::ReadKey($true)
+                            continue
+                        }
+                        $p.WorkItems = $true
+                        $p.CloseIssue = $true
+                        $p.IssueIid = $iid
+                        Invoke-ReviewedWorkflow -Title "Close work item #$iid" -Parameters $p
+                    }
+                    'reopen' {
+                        $iidText = Read-OptionalValue 'Issue IID to reopen'
+                        $iid = 0
+                        if (-not [int]::TryParse($iidText, [ref]$iid) -or $iid -le 0) {
+                            [Console]::WriteLine((Format-AnsiText -Text 'Valid issue IID is required.' -Color @(255, 90, 105) -Bold))
+                            $null = [Console]::ReadKey($true)
+                            continue
+                        }
+                        $p.WorkItems = $true
+                        $p.ReopenIssue = $true
+                        $p.IssueIid = $iid
+                        Invoke-ReviewedWorkflow -Title "Reopen work item #$iid" -Parameters $p
+                    }
+                    'pull' {
+                        $p.WorkItems = $true
+                        $p.PullIssues = $true
+                        $iidText = Read-OptionalValue 'GitLab IID to pull (optional; blank pulls all marked items)'
+                        $iid = 0
+                        if ([int]::TryParse($iidText, [ref]$iid) -and $iid -gt 0) { $p.IssueIid = $iid }
+                        $force = Select-YesNo -Title 'FORCE REFRESH (BYPASS CACHE)?' -Default $false
+                        if ($null -eq $force) { continue }
+                        if ($force) { $p.ForceRefresh = $true }
+                        Invoke-ReviewedWorkflow -Title 'Pull GitLab issues' -Parameters $p
+                    }
+                    'push' {
+                        $p.WorkItems = $true
+                        $p.PushIssues = $true
+                        if (-not (Select-PreviewMode $p)) { continue }
+                        Invoke-ReviewedWorkflow -Title 'Push work items to GitLab' -Parameters $p
+                    }
+                    'generate_list' {
+                        $p.WorkItems = $true
+                        $p.GenerateList = $true
+                        Invoke-ReviewedWorkflow -Title 'Regenerate workitems-list.md dashboard' -Parameters $p
+                    }
+                }
+            }
             'help' {
                 $topic = Read-OptionalValue 'Parameter name or alias; blank opens overview'
                 $p = [ordered]@{ Help = $true }

@@ -166,18 +166,37 @@ function Invoke-Rivet {
     param(
         [Parameter(Position = 0, ParameterSetName = 'Default')]
         [ArgumentCompleter([RivetCommandCompleter])]
-        [ValidateSet('help', 'menu', 'init', 'bootstrap', 'prep-release', 'doctor', 'status', 'version', 'readme', 'commit', 'tag', 'history', 'glo', 'rebuild-changelog')]
+        [ValidateSet('help', 'menu', 'init', 'bootstrap', 'prep-release', 'doctor', 'status', 'version', 'readme', 'commit', 'tag', 'history', 'glo', 'rebuild-changelog', 'flow', 'pipeline', 'work-items', 'issues', 'sync-issues', 'workitem', 'template', 'tasks', 'tasklist', 'wi', 'view', 'close', 'reopen', 'generate-list')]
         [string]$Command,
 
         [switch]$Help,
         [switch]$Menu,
         [switch]$Init,
         [switch]$Bootstrap,
+        [switch]$Bun,
         [switch]$PrepRelease,
         [switch]$Doctor,
         [switch]$Status,
         [switch]$VersionReport,
         [switch]$ValidateReadme,
+        [Alias('Flow', 'Pipeline')][switch]$FlowGraph,
+        [Alias('Issues', 'Tasks', 'Tasklist', 'Wi')][switch]$WorkItems,
+        [switch]$SyncWorkItems,
+        [switch]$PullIssues,
+        [switch]$PushIssues,
+        [switch]$ListIssues,
+        [Alias('View')][switch]$ViewIssue,
+        [Alias('Close')][switch]$CloseIssue,
+        [Alias('Reopen')][switch]$ReopenIssue,
+        [Alias('Index')][switch]$GenerateList,
+        [Alias('Template')][switch]$NewIssue,
+        [Alias('Iid')][int]$IssueIid = 0,
+        [string]$IssueTitle,
+        [string]$IssueDescription,
+        [string[]]$IssueLabels,
+        [string]$IssueState = 'opened',
+        [string]$IssueMilestone,
+        [switch]$ForceRefresh,
 
         [Parameter(Position = 1)]
         [Alias('Param')]
@@ -232,7 +251,8 @@ function Invoke-Rivet {
         [switch]$GitLogNoMerges,
         [string]$RepositoryRoot,
         [string]$ConfigPath,
-        [switch]$DryRun
+        [switch]$DryRun,
+        [switch]$Raw
     )
 
     Set-StrictMode -Version Latest
@@ -260,7 +280,7 @@ function Invoke-Rivet {
     if ($LASTEXITCODE -ne 0 -or -not $gitRoot.Count) { throw 'rivet must run from inside a Git repository.' }
     $resolvedRepoRoot = [System.IO.Path]::GetFullPath(([string]$gitRoot[0]).Trim())
     $resolvedConfigPath = if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
-        [System.IO.Path]::Combine($resolvedRepoRoot, 'repo_config.json')
+        Resolve-RivetPath -RepositoryRoot $resolvedRepoRoot -ItemName 'repo_config.json'
     } else {
         [System.IO.Path]::GetFullPath($ConfigPath)
     }
@@ -282,6 +302,7 @@ function Invoke-Rivet {
 
     $reportRows = [System.Collections.Generic.List[object]]::new(7)
     $failure = $null
+    $versionSummary = $null
     $prepReleaseDefaultCommitSelection = $false
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
@@ -294,21 +315,54 @@ function Invoke-Rivet {
         $reportRows.Add([PSCustomObject]@{ State = $State; Label = $Label; Detail = $Detail })
     }
 
-    $bannerTokens = ConvertTo-AsciiTokens -Lines ($asciiBanner -split '\r?\n') -Connectivity 8
-    foreach ($line in @(ConvertTo-GradientAsciiLines -TokenObject $bannerTokens -Mode Horizontal -StartColor @(0, 180, 255) -EndColor @(255, 60, 180))) {
-        [Console]::WriteLine($line)
+    if (-not $Raw) {
+        $bannerTokens = ConvertTo-AsciiTokens -Lines ($asciiBanner -split '\r?\n') -Connectivity 8
+        foreach ($line in @(ConvertTo-GradientAsciiLines -TokenObject $bannerTokens -Mode Horizontal -StartColor @(0, 180, 255) -EndColor @(255, 60, 180))) {
+            [Console]::WriteLine($line)
+        }
+        [Console]::WriteLine('')
     }
-    [Console]::WriteLine('')
+
+    if ($Command -in @('work-items', 'issues', 'sync-issues', 'workitem', 'template', 'tasks', 'tasklist', 'wi', 'view', 'close', 'reopen', 'generate-list') -or $WorkItems -or $SyncWorkItems -or $PullIssues -or $PushIssues -or $ListIssues -or $NewIssue -or $ViewIssue -or $CloseIssue -or $ReopenIssue -or $GenerateList) {
+        $workAction = if ($ViewIssue -or $Command -eq 'view') { 'View' }
+                      elseif ($CloseIssue -or $Command -eq 'close') { 'Close' }
+                      elseif ($ReopenIssue -or $Command -eq 'reopen') { 'Reopen' }
+                      elseif ($GenerateList -or $Command -in @('generate-list')) { 'GenerateList' }
+                      elseif ($PullIssues) { 'Pull' }
+                      elseif ($PushIssues) { 'Push' }
+                      elseif ($NewIssue -or $Command -eq 'template' -or (-not [string]::IsNullOrWhiteSpace($IssueTitle) -and -not $ViewIssue -and -not $CloseIssue -and -not $ReopenIssue)) { 'New' }
+                      elseif ($SyncWorkItems) { 'Push' }
+                      else { 'List' }
+
+        $workConfig = $null
+        if ([System.IO.File]::Exists($resolvedConfigPath)) {
+            try { $workConfig = Get-RivetConfiguration -ConfigPath $resolvedConfigPath } catch {}
+        }
+        $workResult = Sync-RivetWorkItems `
+            -RepositoryRoot $resolvedRepoRoot `
+            -Config $workConfig `
+            -Action $workAction `
+            -Iid $IssueIid `
+            -Title $IssueTitle `
+            -Description $IssueDescription `
+            -Labels $IssueLabels `
+            -State $IssueState `
+            -Milestone $IssueMilestone `
+            -ForceRefresh:$ForceRefresh `
+            -DryRun:$DryRun `
+            -Raw:$Raw
+        return
+    }
 
     if ($Command -eq 'init' -or $Init) {
         $templateRoot = [System.IO.Path]::Combine($moduleRoot, 'templates', 'js')
-        $null = Initialize-RivetRepository -RepositoryRoot $resolvedRepoRoot -TemplateRoot $templateRoot -DryRun:$DryRun -Confirm:$false
+        $null = Initialize-RivetRepository -RepositoryRoot $resolvedRepoRoot -TemplateRoot $templateRoot -Bun:$Bun -DryRun:$DryRun -Confirm:$false
         return
     }
 
     if ($Command -eq 'bootstrap' -or $Bootstrap) {
         $templateRoot = [System.IO.Path]::Combine($moduleRoot, 'templates', 'js')
-        $null = Initialize-RivetRepository -RepositoryRoot $resolvedRepoRoot -TemplateRoot $templateRoot -DryRun:$DryRun -Confirm:$false
+        $null = Initialize-RivetRepository -RepositoryRoot $resolvedRepoRoot -TemplateRoot $templateRoot -Bun:$Bun -DryRun:$DryRun -Confirm:$false
         if ($DryRun) {
             [Console]::WriteLine((Format-AnsiText -Text 'GitLab metadata synchronization will run after configuration is applied.' -Color @(145, 155, 175)))
             return
@@ -331,6 +385,11 @@ function Invoke-Rivet {
 
     if ($Command -eq 'version' -or $VersionReport) {
         $null = Write-RivetVersionReport -RepositoryRoot $resolvedRepoRoot
+        return
+    }
+
+    if ($Command -in @('flow', 'pipeline') -or $FlowGraph) {
+        Show-RivetFlowGraph
         return
     }
 
@@ -593,7 +652,7 @@ function Invoke-Rivet {
             if (-not [string]::IsNullOrWhiteSpace($CommitScope)) { $commitParameters.Scope = $CommitScope }
             if (-not [string]::IsNullOrWhiteSpace($CommitDescription)) { $commitParameters.Description = $CommitDescription }
             if ($prepReleaseDefaultCommitSelection) {
-                $releaseFileSet = [System.Collections.Generic.HashSet[string]]::new(@('package.json', 'package-lock.json', 'jsr.jsonc', 'CHANGELOG.md', 'release-notes.md', 'docs/data/changelog.json', 'README.md', 'README-npm.md'), [System.StringComparer]::Ordinal)
+                $releaseFileSet = [System.Collections.Generic.HashSet[string]]::new(@('package.json', 'package-lock.json', 'jsr.jsonc', 'bun.lock', 'bunfig.toml', 'CHANGELOG.md', 'release-notes.md', 'docs/data/changelog.json', 'README.md', 'README-npm.md'), [System.StringComparer]::Ordinal)
                 $changedReleaseFiles = @(& git -C $resolvedRepoRoot status --porcelain=v1 --untracked-files=all) | ForEach-Object {
                     if ($_.Length -gt 3) { $_.Substring(3).Trim('"') }
                 } | Where-Object { $releaseFileSet.Contains($_) }
@@ -614,21 +673,43 @@ function Invoke-Rivet {
 
     $stopwatch.Stop()
     $mode = if ($DryRun) { 'DRY RUN' } else { 'APPLY' }
-    [Console]::WriteLine('')
-    [Console]::WriteLine((Format-AnsiText -Text 'FINAL REPORT' -Color @(0, 200, 255) -Bold))
-    [Console]::WriteLine((Format-AnsiText -Text "MODE  $mode" -Color @(145, 155, 175)))
 
-    $stateLevels = @{
-        OK   = 'suc'
-        SKIP = 'skip'
-        FAIL = 'fail'
+    $reportRowsConverted = @($reportRows | ForEach-Object {
+        @{ State = $_.State; Label = $_.Label; Detail = $_.Detail }
+    })
+
+    $projName = (Split-Path $resolvedRepoRoot -Leaf)
+    if ([System.IO.File]::Exists($resolvedConfigPath)) {
+        try {
+            $cfg = Get-RivetConfiguration -ConfigPath $resolvedConfigPath
+            $projName = $cfg.project.displayName
+        } catch {}
     }
-    foreach ($row in $reportRows) {
-        [Console]::WriteLine((Format-LazyLog -Level $stateLevels[$row.State] -Title $row.Label -Message $row.Detail))
-    }
-    [Console]::WriteLine((Format-AnsiText -Text ("ELAPSED  {0:N0} ms" -f $stopwatch.Elapsed.TotalMilliseconds) -Color @(145, 155, 175)))
+
+    $headSha = try { (& git -C $resolvedRepoRoot rev-parse --short HEAD 2>$null).Trim() } catch { '' }
+    $branchName = try { (& git -C $resolvedRepoRoot branch --show-current 2>$null).Trim() } catch { '' }
+    $upstreamStatus = try { (& git -C $resolvedRepoRoot status -sb 2>$null | Select-Object -First 1).TrimStart('#').Trim() } catch { '' }
+
+    $resolvedVersion = if ($versionSummary) { $versionSummary.ResolvedVersion } else { '' }
+
+    $reportResult = Write-RivetReportCard `
+        -Title 'RIVET AUTOMATION REPORT' `
+        -Mode $mode `
+        -Elapsed $stopwatch.Elapsed `
+        -ProjectName $projName `
+        -Version $resolvedVersion `
+        -Branch $branchName `
+        -Head $headSha `
+        -Upstream $upstreamStatus `
+        -Rows $reportRowsConverted `
+        -Artifacts @() `
+        -Raw:$Raw
 
     if ($null -ne $failure) {
         throw $failure
+    }
+
+    if ($Raw) {
+        return $reportResult
     }
 }

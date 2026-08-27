@@ -76,6 +76,20 @@ class RivetCommandCompleter : IArgumentCompleter {
             @{ Name = 'history'; ToolTip = 'Open the exclusive detailed Git history view (alias glo).' }
             @{ Name = 'glo'; ToolTip = 'Open the exclusive detailed Git history view.' }
             @{ Name = 'rebuild-changelog'; ToolTip = 'Rebuild complete CHANGELOG.md and changelog.json across all Git tags from history.' }
+            @{ Name = 'flow'; ToolTip = 'Render the interactive ASCII flow graph of Rivet lifecycle (alias pipeline).' }
+            @{ Name = 'pipeline'; ToolTip = 'Render the interactive ASCII flow graph of Rivet lifecycle.' }
+            @{ Name = 'work-items'; ToolTip = 'List, pull, push, or scaffold local work items and GitLab issues (alias issues, tasks, wi).' }
+            @{ Name = 'issues'; ToolTip = 'Manage local work items and GitLab issues.' }
+            @{ Name = 'tasks'; ToolTip = 'Manage, list, or view repository tasks and work items.' }
+            @{ Name = 'tasklist'; ToolTip = 'View or regenerate the aggregated repository task tracker dashboard.' }
+            @{ Name = 'wi'; ToolTip = 'Work item management shorthand alias.' }
+            @{ Name = 'sync-issues'; ToolTip = 'Synchronize local work items with remote GitLab issues.' }
+            @{ Name = 'workitem'; ToolTip = 'Manage or create a work item.' }
+            @{ Name = 'template'; ToolTip = 'Scaffold a new work item template formatted with metadata tables.' }
+            @{ Name = 'view'; ToolTip = 'View complete work item details, description, acceptance criteria, and notes.' }
+            @{ Name = 'close'; ToolTip = 'Close a work item and flag for push sync.' }
+            @{ Name = 'reopen'; ToolTip = 'Reopen a closed work item and flag for push sync.' }
+            @{ Name = 'generate-list'; ToolTip = 'Regenerate the aggregated workitems-list.md dashboard index.' }
         )
 
         foreach ($cmd in $commands) {
@@ -295,6 +309,7 @@ class RivetHelpParamCompleter : IArgumentCompleter {
             @{ Name = 'Menu'; ToolTip = 'Open the interactive rivet command center' }
             @{ Name = 'Init'; ToolTip = 'Initialize repository-root rivet configuration' }
             @{ Name = 'Bootstrap'; ToolTip = 'Initialize configuration and synchronize GitLab metadata' }
+            @{ Name = 'Bun'; ToolTip = 'Include Bun runtime templates (bunfig.toml and bun.lock)' }
             @{ Name = 'PrepRelease'; ToolTip = 'Prepare all standard release metadata' }
             @{ Name = 'Doctor'; ToolTip = 'Validate rivet repository readiness' }
             @{ Name = 'Status'; ToolTip = 'Show repository and release state' }
@@ -310,6 +325,9 @@ class RivetHelpParamCompleter : IArgumentCompleter {
             @{ Name = 'FinalizeRelease'; ToolTip = 'Generate finalized, dated release documentation' }
             @{ Name = 'RebuildChangelog'; ToolTip = 'Rebuild complete CHANGELOG.md and changelog.json across all Git tags from history' }
             @{ Name = 'Rebuild'; ToolTip = 'Alias for RebuildChangelog' }
+            @{ Name = 'FlowGraph'; ToolTip = 'Render the interactive ASCII flow graph of Rivet lifecycle' }
+            @{ Name = 'Flow'; ToolTip = 'Alias for FlowGraph' }
+            @{ Name = 'Pipeline'; ToolTip = 'Alias for FlowGraph' }
             @{ Name = 'UpdateChangelogJson'; ToolTip = 'Generate complete documentation changelog data' }
             @{ Name = 'UpdateMergeRequest'; ToolTip = 'Generate the working merge-request document' }
             @{ Name = 'CreateGitLabMergeRequest'; ToolTip = 'Create a GitLab merge request from mr.md' }
@@ -335,10 +353,20 @@ class RivetHelpParamCompleter : IArgumentCompleter {
             @{ Name = 'glo'; ToolTip = 'Alias for GitLog' }
             @{ Name = 'GitLogCount'; ToolTip = 'Set the maximum displayed commit count' }
             @{ Name = 'GitLogAll'; ToolTip = 'Read history from every Git ref' }
-            @{ Name = 'GitLogNoMerges'; ToolTip = 'Omit merge commits from history' }
+            @{ Name = 'WorkItems'; ToolTip = 'Manage local work items and GitLab issues' }
+            @{ Name = 'SyncWorkItems'; ToolTip = 'Synchronize local work items with remote GitLab issues' }
+            @{ Name = 'PullIssues'; ToolTip = 'Pull remote GitLab issues into local .rivet/work-items/' }
+            @{ Name = 'PushIssues'; ToolTip = 'Push local .rivet/work-items/ to remote GitLab issues' }
+            @{ Name = 'ListIssues'; ToolTip = 'List local work items in a formatted TUI table' }
+            @{ Name = 'NewIssue'; ToolTip = 'Scaffold a new local work item template' }
+            @{ Name = 'Template'; ToolTip = 'Scaffold a new work item template with metadata tables' }
+            @{ Name = 'IssueIid'; ToolTip = 'Target a specific GitLab issue IID for pull or push' }
+            @{ Name = 'Iid'; ToolTip = 'Alias for IssueIid' }
+            @{ Name = 'ForceRefresh'; ToolTip = 'Bypass API cache when fetching remote issues' }
             @{ Name = 'RepositoryRoot'; ToolTip = 'Select the consuming repository root directory' }
             @{ Name = 'ConfigPath'; ToolTip = 'Override repository configuration file path' }
             @{ Name = 'DryRun'; ToolTip = 'Preview supported actions without applying writes' }
+            @{ Name = 'Raw'; ToolTip = 'Suppress visual report cards and return structured objects' }
         )
 
         foreach ($p in $parameters) {

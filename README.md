@@ -1,6 +1,6 @@
 # rivet
 
-Rivet provides repository metadata, release, GitLab, commit, and history automation for JavaScript repositories.
+Rivet is an automation engine for JavaScript repository metadata, SemVer calculation, GitLab workflows, release artifacts, and interactive commit lifecycles.
 
 ```text
           /$$                           /$$
@@ -10,15 +10,30 @@ Rivet provides repository metadata, release, GitLab, commit, and history automat
 | $$  \ $$| $$| $$ \ $$ \ $$| $$$$$$$$  | $$      /$$$$$$$
 | $$  | $$| $$| $$ | $$ | $$| $$_____/  | $$ /$$ /$$__  $$
 |  $$$$$$$| $$| $$ | $$ | $$|  $$$$$$$  |  $$$$/|  $$$$$$$
-\____  $$|__/|__/ |__/ |__/ \_______/   \___/   \_______/
-      /$$ /
+ \____  $$|__/|__/ |__/ |__/ \_______/   \___/   \_______/
+       /$$ /
 |  $$$$$$/
  \______/
 ```
 
+## Features
+
+■ **Conventional Commit SemVer Engine**: Computes exact semantic version increments (`major`, `minor`, `patch`, or `none`) from commit histories using Conventional Commit standards.
+■ **Manifest Synchronization**: Synchronizes version identities atomically across `package.json`, `jsr.jsonc`, and `package-lock.json`.
+■ **Clean `.rivet/` Architecture**: Consolidates operational files (`.rivet/repo_config.json`, `.rivet/repo_meta.json`, `.rivet/mr.md`, `.rivet/work-items/*.md`) into a single isolated directory while retaining backwards-compatible root fallback.
+■ **Work Items & Issue Synchronization**: Bidirectionally synchronizes local structured Markdown work items (`.rivet/work-items/<iid>-<slug>.md`) with GitLab Issues REST API (`pull`, `push`, `list`, `new`).
+■ **Generic Completion Report Card**: Renders detailed ASCII TUI completion report cards with orange-to-offblack gradient borders, responsive layout, paragraph wrapping, and `-Raw` programmatic output switch for compound workflows (`[MA]`).
+■ **Runtime Template Initialization**: Scaffolds Node.js/npm and Bun environments (`bunfig.toml`, `bun.lock`) while maintaining `package.json` as the canonical package and script definition.
+■ **Comprehensive Diagnostics (`doctor`)**: Validates PowerShell version, Git installation, worktree integrity, Git identity (`user.name`/`user.email`), runtime engines (`node`/`bun`), manifest parity, lockfile presence, configuration health, and README heading contracts.
+■ **Automated Merge Request Management**: Formats table-based merge request documents (`mr.md`), calculates release types in MR titles (`Release (<type>) <Project> <Version>`), creates/updates GitLab MRs, and writes back MR IIDs and web links.
+■ **Changelog & Release Notes Generation**: Rebuilds release notes from Git tag histories or localized ranges, formatting Conventional Commits into categorized sections with linked hashes and GitLab author references.
+■ **Interactive Flow Graph Visualization**: Renders ASCII diagrams of the complete Rivet release and automation lifecycle.
+■ **Static Site Generator Integration**: Exports structured data (`docs/data/changelog.json` and `docs/data/releases.json`) consumable by Hugo, Eleventy (11ty), and Jekyll.
+■ **Responsive Terminal User Interface (TUI)**: Features an alternate-screen interactive menu (`smenu.ps1`) with layout auto-detection (wide dual-column vs narrow stacked), multi-action indicators (`[MA]`), and truecolor ANSI rendering.
+
 ## Installation in consuming repositories
 
-Add `rivet.ps1` to the consuming repository root and ignore `/rivet/`. The launcher clones `https://gitlab.com/staticcanvas/rivet.git` on first use, unless `RIVET_REPOSITORY_URL` provides another source, then forwards all arguments with the consuming repository root explicitly selected.
+Add `rivet.ps1` to the consuming repository root and add `/rivet/` to `.gitignore`. The launcher clones `https://gitlab.com/staticcanvas/rivet.git` on first invocation (or the repository specified by the `RIVET_REPOSITORY_URL` environment variable) and forwards all parameters with the repository root explicitly bound.
 
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1 doctor
@@ -26,7 +41,7 @@ Add `rivet.ps1` to the consuming repository root and ignore `/rivet/`. The launc
 ./rivet.ps1 prep-release -DryRun
 ```
 
-Direct development invocation remains supported when the consuming repository is explicit:
+Direct module invocation in development environments:
 
 ```powershell {title="rivet/run.ps1"}
 ./rivet/run.ps1 -RepositoryRoot $PWD status
@@ -36,15 +51,31 @@ Direct development invocation remains supported when the consuming repository is
 
 ### Conceptual
 
-Rivet discovers the consuming repository with Git, so the cloned tool can live at any depth. Project-owned state remains at the repository root in `repo_config.json` and `repo_meta.json`; replacing or upgrading the cloned rivet directory cannot overwrite that state. Generic initialization, JavaScript configuration, CI, and README-header templates remain under `templates/js`.
+Rivet locates the target repository root through Git, allowing the toolkit to reside at any directory depth. Authoritative project configuration is maintained at the target repository root in `repo_config.json` and `repo_meta.json`. Updating or replacing the rivet clone does not overwrite existing configuration.
 
-The idempotent initializer infers package, namespace, GitLab path, current branch, and display-name defaults. It creates only missing root files, validates an existing `repo_config.json`, and never overwrites either configuration file.
+Initialization infers namespace, package name, project path, default branch, and display name from the local Git context and remote origin. It creates only missing files and validates configuration syntax without replacing existing files.
+
+When `-Bun` is supplied (or when `bunfig.toml` or `bun.lock` is detected), initialization includes Bun configuration templates (`bunfig.toml`, `bun.lock`) with dynamic package token replacement while keeping `package.json` for scripts and package resolution.
 
 ### Strict reference
+
+Initialize default npm configuration:
 
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1 init -DryRun
 ./rivet.ps1 init
+```
+
+Initialize Bun configuration:
+
+```powershell {title="rivet.ps1"}
+./rivet.ps1 init -Bun -DryRun
+./rivet.ps1 init -Bun
+```
+
+Initialize configuration and apply GitLab project metadata:
+
+```powershell {title="rivet.ps1"}
 ./rivet.ps1 bootstrap -DryRun
 ./rivet.ps1 bootstrap
 ```
@@ -53,58 +84,60 @@ The idempotent initializer infers package, namespace, GitLab path, current branc
 
 ### Conceptual
 
-Run `run.ps1` from any working directory inside the consuming Git repository. The default operation calculates the next version from Conventional Commits, synchronizes `package.json` and `jsr.jsonc`, rebuilds the templated `README.md` project header, regenerates its table of contents, and validates configured required headings. Release-document generation and remote GitLab synchronization are opt-in. The process does not modify `README-npm.md`. Output is separated into three colored sections: the gradient ASCII header, live LazyLog action messages, and the final execution report.
+Executing `run.ps1` without explicit action switches runs the default metadata maintenance cycle. This process:
+1. Calculates the next SemVer version from Conventional Commits after the nearest reachable stable tag.
+2. Synchronizes version strings across `package.json` and `jsr.jsonc`.
+3. Re-renders the centered HTML metadata block in `README.md` via `jsheader.ps1`.
+4. Regenerates the Markdown table of contents within the collapsible `<details>` block via `New-MarkdownTOC.ps1`.
+5. Validates that required Markdown headings defined in `readme.requiredHeadings` are present in `README.md`.
 
-`jsheader.ps1` treats the existing leading aligned `<div>` block as a generated template. Alignment, project identity, repository and package paths, badge style, badge colors, URLs, and the active release tag are injected from repository configuration. The rendered description and the GitLab project description share `repo_meta.json` as their source.
-
-`Test-ReadmeStructure.ps1` parses ATX headings outside fenced code blocks and compares normalized heading levels and names with `readme.requiredHeadings`. It prints a complete pass/missing report and does not reorder or rewrite authored sections.
+`README-npm.md` remains manually authored and is not modified during automated metadata passes.
 
 ### Strict reference
+
+Execute default metadata maintenance:
 
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1
 ```
 
-Preview local changes without writing files:
+Preview metadata updates without writing files:
 
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1 -DryRun
 ./rivet.ps1 readme
 ```
 
-Open the colored terminal manual, grouped by workflow with runnable examples beneath the parameter reference, or inspect one parameter in full:
+Access parameter documentation via the built-in manual:
 
 ```powershell {title="rivet/help.ps1"}
 ./rivet.ps1 help
-./rivet.ps1 help glo
+./rivet.ps1 help -Param Bun
 ./rivet.ps1 help -Param Commit
 ./rivet.ps1 -Help
-./rivet/help.ps1
-./rivet/help.ps1 -Param Commit
-./rivet/help.ps1 -Param glo
 ```
-
-The version calculator uses the nearest reachable Git tag, matching the canonical `Get-ConventionalCommitVersion` behavior. It scans commits after that tag in Git log order and applies every Conventional Commit bump cumulatively. Each breaking change increments major, each feature increments minor, and each fix or performance commit increments patch while resetting lower components according to SemVer.
 
 ## Interactive command center
 
 ### Conceptual
 
-The command center exposes every rivet workflow through `Show-SMenu`. Menus are organized by task rather than raw switches: Prep Release, local metadata, release documents, merge-request generation and publication, GitLab metadata, Conventional Commits, tagging and publishing, Git history, and help. Each workflow collects only its relevant options, renders the exact `run.ps1` command, and requires a final Run or Back selection. The `[MA]` tag identifies a compound workflow that runs multiple rivet actions; the tag appears on both its main-menu category and the exact compound submenu choices.
+The command center exposes all Rivet workflows through `Show-SMenu`. Operations are categorized into workflow modules:
+- **Initialize repository**: Local configuration (npm / Bun) and GitLab metadata bootstrap.
+- **Prep Release**: Automated release preparation with preview, apply, and commit stages.
+- **Local metadata**: Manifest versioning, README header, TOC generation, and heading validation.
+- **Release documents**: Draft updates, finalized releases, changelog rebuilding, and JSON exports.
+- **Merge request**: `mr.md` generation, GitLab MR creation, and GitLab MR updating.
+- **GitLab metadata**: Remote topics, description, and label synchronization.
+- **Conventional commit**: Interactive type, scope, subject, and file staging.
+- **Tag and publish**: SemVer release tags and snapshot tags with remote safety verification.
+- **Git history**: Detailed graphical commit history view (`glo`).
+- **Help**: Interactive parameter reference and usage manuals.
 
-Action-specific workflows automatically skip unrelated local metadata work. Preview mode is the initial choice for release, merge-request, and GitLab operations. Remote label deletion defaults off. Escape cancels the current selection, returns to the prior screen, or exits at the main menu. The interface loads the display name from `repo_config.json`, contains no repository-specific hardcoded execution paths, and can move with the complete `rivet` runner to another JavaScript repository.
-
-Release-document workflows can also write `docs/data/changelog.json` with `-UpdateChangelogJson`. Git history supplies exact metadata for the selected range, while every version and note is projected from the canonical `CHANGELOG.md` in document order. Historical notes without embedded Git metadata remain present with null metadata fields instead of receiving inferred hashes, types, scopes, or ranges.
-
-`Show-SMenu` owns the alternate screen while the command center is active and polls terminal dimensions independently of keyboard input. A resize triggers one atomic frame redraw. Wide terminals use label and description columns; narrow terminals stack the selected description; short terminals reduce the visible viewport while preserving access through arrows, Page Up, Page Down, Home, and End. Text is measured before ANSI encoding through the shared `Clap` helpers. Selected detail wraps at word boundaries, and `[MA]` follows the workflow title so scanning begins with the action name.
-
-Command review and workflow-result views use the shared rounded-panel renderer. Long commands wrap to the current content width before coloring. Workflow results include completion state and elapsed time, and terminal cursor/alternate-buffer state is restored in `finally` blocks after selection, cancellation, failure, or exit.
-
-The command-center identity line assigns separate semantic colors to the project name, package name, and package version. Version-report bump inputs and repository status values use the same palette for major, minor, patch, clean, warning, and failure states.
+The `[MA]` suffix denotes compound workflows executing multiple underlying operations. `Show-SMenu` manages the alternate terminal buffer, measures character width prior to ANSI truecolor encoding to eliminate tearing, and re-renders dynamically upon terminal resize.
 
 ### Strict reference
 
-Open the command center with either supported form:
+Launch the interactive command center:
 
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1 menu
@@ -115,15 +148,32 @@ Open the command center with either supported form:
 
 ### Conceptual
 
-`prep-release` combines the frequently repeated local release operations. It calculates and synchronizes the cumulative Conventional Commit version, refreshes the root README header and table of contents, validates required README sections, finalizes the matching version and date in `CHANGELOG.md`, generates `release-notes.md`, and updates the ignored working `mr.md` document. `README-npm.md` remains authored separately but is included in the reviewed release-file commit selection when it has changed.
+`prep-release` coordinates full release staging in one operation:
+1. Computes the next version and synchronizes `package.json`, `jsr.jsonc`, and `package-lock.json`.
+2. Updates `README.md` header metadata and table of contents.
+3. Validates required `README.md` heading structure.
+4. Finalizes the dated release section in `CHANGELOG.md` and generates `release-notes.md`.
+5. Generates or updates the working merge request document (`mr.md`) with the Conventional Commit bump type in the title (`Release (<type>) <Project> <Version>`).
 
-Preparation does not stage files by itself. Adding `-Commit` opens the normal patch review and selects only changed tracked files from `package.json`, `package-lock.json`, `jsr.jsonc`, `CHANGELOG.md`, `release-notes.md`, `README.md`, and `README-npm.md`.
+Passing `-Commit` opens the patch review workflow and automatically stages modified release files from `package.json`, `package-lock.json`, `jsr.jsonc`, `bun.lock`, `bunfig.toml`, `CHANGELOG.md`, `release-notes.md`, `docs/data/changelog.json`, `README.md`, and `README-npm.md`.
 
 ### Strict reference
 
+Preview release preparation:
+
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1 prep-release -DryRun
+```
+
+Apply release preparation:
+
+```powershell {title="rivet.ps1"}
 ./rivet.ps1 prep-release
+```
+
+Apply release preparation and review commit:
+
+```powershell {title="rivet.ps1"}
 ./rivet.ps1 prep-release -Commit
 ```
 
@@ -131,35 +181,48 @@ Preparation does not stage files by itself. Adding `-Commit` opens the normal pa
 
 ### Conceptual
 
-`-Tag` is an exclusive action that calculates the next Conventional Commit version or accepts `-TagVersion`, then reviews an annotated tag targeting the current `HEAD`. Without `-Snapshot`, the generated production tag appends `-release`, such as `v0.28.0-release`, and starts validation, npm/JSR publishing, Pages deployment, generic-package generation, and the GitLab production release.
+The `-Tag` workflow creates and pushes an annotated Git tag targeting `HEAD`.
+- **Production Tags** (default): Generates a tag with the `-release` suffix (e.g. `v1.2.0-release`), triggering production CI publishing pipelines (npm, JSR, Pages, and GitLab Releases).
+- **Snapshot Tags** (`-Snapshot`): Generates a plain SemVer tag (e.g. `v1.2.0`) for validation and test pipelines without triggering package publication.
 
-`-Snapshot` creates a plain SemVer tag such as `v0.28.0`. GitLab CI validates and builds the checkpoint without publishing packages or creating a production release. The `*-release` pattern can therefore be protected independently in GitLab.
+Pre-flight safety requirements enforced prior to tag creation:
+1. Working tree must be clean.
+2. Local branch must not be behind or diverged from upstream.
+3. Manifest versions (`package.json` and `jsr.jsonc`) must match the target tag version.
+4. Target tag must not exist locally or on the remote.
 
-Before publication, rivet refreshes the configured remote and requires a clean worktree, an upstream branch that is not behind or diverged, matching manifest versions, and no conflicting tag. If the branch is locally ahead, the branch and tag are pushed atomically. A failed push removes a tag created by that attempt, while a matching pre-existing local tag can be retried. `-DryRun` reports blockers and `-TagForce` permits explicitly reviewed non-interactive automation. Existing unrelated tags are never pushed.
+If local commits are ahead of upstream, the branch and new tag are pushed atomically.
 
 ### Strict reference
 
-Preview a calculated production tag:
+Preview production tag creation:
 
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1 -Tag -DryRun
 ```
 
-Preview a validation-only snapshot tag:
+Preview validation snapshot tag creation:
 
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1 -Tag -Snapshot -DryRun
 ```
 
-Review and push an explicit production version:
+Create and push an explicit version tag:
 
 ```powershell {title="rivet.ps1"}
-./rivet.ps1 -Tag -TagVersion 0.29.0
+./rivet.ps1 -Tag -TagVersion 1.2.0
 ```
 
 ## Diagnostics and readiness
 
-Use the read-only operational commands before commits or releases:
+### Conceptual
+
+Rivet provides three read-only diagnostic and inspection commands:
+- **`doctor` (`Test-RivetRepository`)**: Verifies PowerShell 7+, Git installation, configuration validity, `repo_meta.json` presence, Git worktree state, Git author identity (`user.name`/`user.email`), runtime engines (`node` / `bun`), manifest version parity (`package.json` == `jsr.jsonc`), lockfile presence (`package-lock.json` / `bun.lock`), GitLab token availability, and README structure contracts.
+- **`status` (`Write-RivetRepositoryStatus`)**: Displays current branch, commit hash, upstream tracking status, worktree modification count, version baseline, calculated next version, production tag name, and snapshot tag state.
+- **`version` (`Write-RivetVersionReport`)**: Analyzes the commit range after the baseline tag, classifying each commit's Conventional Commit bump input.
+
+### Strict reference
 
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1 doctor
@@ -167,47 +230,55 @@ Use the read-only operational commands before commits or releases:
 ./rivet.ps1 version
 ```
 
-`doctor` validates dependencies, configuration, required files, commit defaults, and optional credentials. `status` summarizes worktree, upstream, version, and next tags. `version` explains the stable-tag baseline and the bump effect of every subsequent commit.
-
 ## Git history view
 
 ### Conceptual
 
-`-glo` is an alias for the exclusive `-GitLog` mode. It is read-only and returns before version, README, release, remote, or commit actions can run. Each commit is rendered as one dense record containing its graph marker, abbreviated hash, ref decorations, ISO timestamp, relative age, author name and email, signature status, subject, changed-file count, insertions, deletions, binary-file count, and merge-parent count.
+`-glo` (alias for `-GitLog`) is an exclusive read-only history viewer. Each commit is formatted as a single dense record displaying:
+- Graph markers and short commit hash.
+- Ref decorations (HEAD, branch, tags).
+- Commit author name, email, and signature status.
+- Relative age and ISO timestamp.
+- Commit subject description.
+- File modification metrics (files changed, insertions, deletions).
 
-The history is surrounded by repository detail: current branch and HEAD, upstream tracking with ahead/behind counts, worktree state, aggregate author/merge/signature/change totals, and the complete changed-path list. The default limit is 25 commits. `-GitLogAll` traverses all refs and `-GitLogNoMerges` filters merges.
+Output includes repository status headers and summary statistics (total commits, authors, merges, signed commits, and changed files).
 
 ### Strict reference
 
-Show the latest 25 commits:
+Display default history (latest 25 commits):
 
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1 -glo
 ```
 
-Show 75 non-merge commits across all refs:
+Display custom commit count across all refs excluding merges:
 
 ```powershell {title="rivet.ps1"}
-./rivet.ps1 -glo -GitLogCount 75 -GitLogAll -GitLogNoMerges
+./rivet.ps1 -glo -GitLogCount 50 -GitLogAll -GitLogNoMerges
 ```
 
 ## Conventional Commit workflow
 
 ### Conceptual
 
-Pass `-Commit` to run the metadata actions and then open an interactive Conventional Commit workflow. `Show-SMenu` provides ordered type, scope, and file selection without clearing the terminal. Scope path patterns suggest the initial file selection. The review displays the exact subject, extracted release note, selected and excluded paths, diff totals, and patch before staging occurs. Confirming stages only the reviewed paths and creates one commit; declining leaves the index and working tree unchanged.
-
-Commit types, scopes, and defaults are repository configuration rather than runner code, so the `rivet` runner and configuration can be shared across JavaScript repositories and adjusted in one JSON object. Explicit parameters support scripts and dry-run validation without keyboard menus.
+Passing `-Commit` initiates an interactive commit workflow using `Show-SMenu` without clearing the terminal.
+1. **Type Selection**: Selects Conventional Commit type (`feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`).
+2. **Scope Selection**: Selects scope configured in `repo_config.json` (or `none` to omit scope parentheses).
+3. **Subject Input**: Prompts for a commit description (enforces maximum 100 characters and removes trailing periods).
+4. **File Selection**: Presents changed paths for interactive multi-selection, pre-suggesting files matching scope patterns.
+5. **Patch Review**: Displays subject, extracted release note, selected file list, diff totals, and unified patch before staging.
+6. **Execution**: Confirms staging and creates the commit. Declining leaves the index and worktree untouched.
 
 ### Strict reference
 
-Open the interactive workflow after normal metadata maintenance:
+Interactive commit workflow:
 
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1 -Commit
 ```
 
-Preview a fully automated selection without staging files:
+Automated non-interactive commit execution:
 
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1 `
@@ -216,265 +287,285 @@ Preview a fully automated selection without staging files:
   -SkipTableOfContents `
   -Commit `
   -CommitType feat `
-  -CommitScope rivet `
-  -CommitDescription 'add interactive commit workflow' `
-  -DryRun
+  -CommitScope core `
+  -CommitDescription 'add runtime diagnostic checks' `
+  -CommitFiles 'scripts/Test-RivetRepository.ps1'
 ```
 
 ## Changelog and release notes
 
 ### Conceptual
 
-Release-document generation queries GitLab and reads non-merge commits after the newest release tag reachable from `HEAD`. Ordinary repository tags without a GitLab release are ignored. Conventional Commit types map to Added, Changed, Deprecated, Removed, Fixed, and Security. Non-conventional commit subjects are retained under Changed so the selected range is not silently incomplete. Every generated change includes its seven-character hash as a GitLab commit link and its Git author as an `@username` mention when the name is a valid GitLab username. Names containing spaces remain plain text. Pass `-IncludeCommitHash:$false` or `-IncludeAuthor:$false` to omit either field. `-CommitScope core` filters entries to the exact parsed `core` scope rather than matching arbitrary subject text.
-
-Only content between `rivet:changelog` and `rivet:release-notes` markers is replaced. Legacy `glmeta:*` markers are accepted and migrated when a document is next generated. When changelog markers move to another version, their prior body is retained as immutable release content. Draft markers are always placed under `Unreleased`; finalized markers are placed under the requested version. Finalization is rejected when its version already matches the baseline tag but `HEAD` contains later commits, preventing maintenance changes from being relabeled as an existing release. `release-notes.md` intentionally has no generated H1 because the CI release job nests its contents beneath the release description's `## Notes` heading. `-FromTag` overrides the automatic baseline with any Git ref that is an ancestor of `HEAD`, allowing a release to skip snapshot or intermediate releases. The override affects release documents only and never changes package-version calculation.
+Release documentation generation parses commits after the latest reachable GitLab release tag.
+- Conventional Commit types map to standard headings: `Added` (`feat`), `Fixed` (`fix`), `Changed` (`refactor`, `style`, `build`, `ci`, `chore`, non-conventional subjects), `Deprecated`, `Removed`, and `Security`.
+- Scope filtering via `-CommitScope <name>` isolates entries matching a specific subsystem.
+- Each entry includes a 7-character Git hash linking to GitLab and an `@username` author reference when mapped in `authors.mappings`.
+- Replaces content exclusively between `<!-- rivet:changelog -->` and `<!-- rivet:release-notes -->` markers.
+- `rebuild-changelog` iterates chronologically across all Git tags, regenerating `CHANGELOG.md` and `docs/data/changelog.json` across the complete repository history.
 
 ### Strict reference
 
-Preview a draft from the latest reachable GitLab release tag:
+Preview draft changelog updates:
 
 ```powershell {title="rivet.ps1"}
-./rivet.ps1 `
-  -SkipVersion `
-  -SkipReadmeMetadata `
-  -SkipTableOfContents `
-  -UpdateReleaseDocs `
-  -DryRun
+./rivet.ps1 -UpdateReleaseDocs -DryRun
 ```
 
-Generate from an older explicit baseline:
+Finalize release documentation with explicit version and baseline:
 
 ```powershell {title="rivet.ps1"}
-./rivet.ps1 `
-  -SkipVersion `
-  -SkipReadmeMetadata `
-  -SkipTableOfContents `
-  -UpdateReleaseDocs `
-  -FromTag v0.25.0
+./rivet.ps1 -FinalizeRelease -ReleaseVersion 1.2.0 -FromTag v1.1.0
 ```
 
-Finalize a dated release section:
+Rebuild entire changelog history across all tags:
 
 ```powershell {title="rivet.ps1"}
-./rivet.ps1 `
-  -SkipVersion `
-  -SkipReadmeMetadata `
-  -SkipTableOfContents `
-  -FinalizeRelease `
-  -ReleaseVersion 0.28.0 `
-  -FromTag v0.27.3
+./rivet.ps1 rebuild-changelog -DryRun
+./rivet.ps1 rebuild-changelog
 ```
 
-## Merge request document
+## Merge request document & GitLab automation
 
 ### Conceptual
 
-Merge-request generation uses the existing root `mr.md` as its working template. Because root `mr.md` is intentionally ignored by Git, a missing working file is seeded from the tracked `rivet/templates/mr.md` template. The generator updates the title, source branch, target branch, change range, and the marker-bounded Summary list while preserving manually maintained Compatibility, Validation, and Review notes. It also ensures the npm and JSR package-version task is the final item in the Release checklist.
+Rivet maintains the working merge request document in `mr.md` (ignored by Git, seeded from `templates/mr.md`).
 
-Generated Summary items include the short commit hash followed by the commit author. These use the same default-on metadata switches as changelog and release-note generation.
+#### Title & Conventional Commit MR Type Calculation
+The MR title is dynamically formatted as `Release (<type>) <Project> <Version>`, where `<type>` is calculated from commits between the baseline tag and `HEAD` using Conventional Commit bump rules (`major`, `minor`, `patch`, or `none`).
 
-### Strict reference
+#### Markdown Table Metadata
+The document header uses structured key-value tables:
+- `Gitlab Merge Request IID`
+- `Gitlab Merge Link`
+- `Generated Date`
+- `Commit logs parsed`
+- `Title`
+- `Source branch`
+- `Target branch`
 
-Update `mr.md` from the latest reachable stable SemVer tag:
-
-```powershell {title="rivet.ps1"}
-./rivet.ps1 `
-  -SkipVersion `
-  -SkipReadmeMetadata `
-  -SkipTableOfContents `
-  -UpdateMergeRequest
-```
-
-Generate without commit metadata and select the target branch explicitly:
-
-```powershell {title="rivet.ps1"}
-./rivet.ps1 `
-  -SkipVersion `
-  -SkipReadmeMetadata `
-  -SkipTableOfContents `
-  -UpdateMergeRequest `
-  -MergeTargetBranch main `
-  -IncludeCommitHash:$false `
-  -IncludeAuthor:$false
-```
-
-## GitLab merge-request synchronization
-
-### Conceptual
-
-Rivet can create a GitLab merge request from `mr.md` or update the matching open merge request. The title, source branch, target branch, and Markdown description remain document-driven. Create mode rejects an existing open request for the same branch pair; update mode requires exactly one match. Both modes read the configured token environment variable, hide the token from output, and enable source-branch removal after merge.
+#### GitLab MR Automation
+- **Create (`-CreateGitLabMergeRequest`)**: Reads metadata and description from `mr.md`, creates a GitLab MR via the REST API, and automatically writes back the assigned IID (e.g. `!42`) and web URL into `mr.md`.
+- **Update (`-UpdateGitLabMergeRequest`)**: Identifies open MRs via stored IID or source/target branch pairs and synchronizes title and description payloads from `mr.md`.
 
 ### Strict reference
+
+Update local `mr.md` document:
+
+```powershell {title="rivet.ps1"}
+./rivet.ps1 -UpdateMergeRequest
+```
+
+Create GitLab merge request and write back IID:
 
 ```powershell {title="rivet.ps1"}
 ./rivet.ps1 -UpdateMergeRequest -CreateGitLabMergeRequest -DryRun
 ./rivet.ps1 -UpdateMergeRequest -CreateGitLabMergeRequest
-./rivet.ps1 -UpdateMergeRequest -UpdateGitLabMergeRequest -DryRun
+```
+
+Update existing GitLab merge request:
+
+```powershell {title="rivet.ps1"}
 ./rivet.ps1 -UpdateMergeRequest -UpdateGitLabMergeRequest
 ```
-
-## Script responsibilities
-
-`run.ps1` is the supported entry point for routine use. It imports `rivet.psd1` once; the root module loads an explicit allow-list of reviewed runtime helpers and action files. Adding a file beneath `scripts/helpers/` does not place it in the runtime or public command surface. Import the manifest when developing or diagnosing an individual exported action instead of recreating the loader order.
-
-```powershell {title="module development"}
-Import-Module ./rivet.psd1 -DisableNameChecking
-Get-Command -Module Rivet
-```
-
-| Script                                                                           | Invocation  | Responsibility                                                                                                             |
-| -------------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
-| [`run.ps1`](run.ps1)                                                             | Direct      | Orchestrates local metadata actions, optional GitLab synchronization, live action logs, and the final report.              |
-| [`rivet.psd1`](rivet.psd1)                                                     | Import      | Declares the supported module metadata and intentionally exported command surface.                                         |
-| [`rivet.psm1`](rivet.psm1)                                                     | Module      | Loads the reviewed runtime allow-list while keeping experimental and foreign helpers isolated.                             |
-| [`help.ps1`](help.ps1)                                                           | Direct      | Renders the complete colored runner manual or detailed knowledge and examples for one parameter or alias.                  |
-| [`Invoke-RivetMenu.ps1`](scripts/Invoke-RivetMenu.ps1)                         | Dot-sourced | Builds, reviews, and dispatches workflow-specific runner commands through Show-SMenu.                                      |
-| [`Get-RivetConfiguration.ps1`](scripts/Get-RivetConfiguration.ps1)             | Dot-sourced | Loads root configuration, validates required fields, and resolves GitLab author mappings.                                  |
-| [`Initialize-RivetRepository.ps1`](scripts/Initialize-RivetRepository.ps1)     | Dot-sourced | Creates missing root configuration from reusable JavaScript templates without overwriting existing state.                  |
-| [`Test-ReadmeStructure.ps1`](scripts/Test-ReadmeStructure.ps1)                   | Dot-sourced | Reports required README heading presence while ignoring fenced-code examples.                                               |
-| [`Get-ConventionalCommitVersion.ps1`](scripts/Get-ConventionalCommitVersion.ps1) | Dot-sourced | Finds the latest reachable stable tag and calculates the next SemVer version from Conventional Commits.                    |
-| [`Update-JSLibSemver.ps1`](scripts/Update-JSLibSemver.ps1)                       | Dot-sourced | Applies one version to package.json, jsr.jsonc, and root package-lock.json package identities.                            |
-| [`Update-ReleaseDocumentation.ps1`](scripts/Update-ReleaseDocumentation.ps1)     | Dot-sourced | Generates marker-bounded changelog and release-note sections from a validated Git range.                                  |
-| [`Update-MergeRequestDocumentation.ps1`](scripts/Update-MergeRequestDocumentation.ps1) | Dot-sourced | Updates generated merge-request fields and its marker-bounded change list while preserving manual sections.       |
-| [`Invoke-GitLabMergeRequest.ps1`](scripts/Invoke-GitLabMergeRequest.ps1)         | Dot-sourced | Creates or updates a GitLab merge request from the generated repository-root mr.md document.                       |
-| [`Invoke-RepositoryCommit.ps1`](scripts/Invoke-RepositoryCommit.ps1)             | Dot-sourced | Builds, reviews, stages, and submits one repository-configured Conventional Commit.                                |
-| [`Invoke-RepositoryTag.ps1`](scripts/Invoke-RepositoryTag.ps1)                   | Dot-sourced | Reviews, validates, creates, and explicitly pushes one snapshot or production tag.                                 |
-| [`Write-PrettyGitLog.ps1`](scripts/Write-PrettyGitLog.ps1)                       | Dot-sourced | Renders dense per-commit records and repository, history, upstream, and worktree details.                           |
-| [`Write-RivetVersionReport.ps1`](scripts/Write-RivetVersionReport.ps1)           | Dot-sourced | Explains the version baseline, result, and per-commit bump inputs.                                                   |
-| [`Write-RivetRepositoryStatus.ps1`](scripts/Write-RivetRepositoryStatus.ps1)     | Dot-sourced | Displays read-only repository, upstream, worktree, version, and tag state.                                          |
-| [`Test-RivetRepository.ps1`](scripts/Test-RivetRepository.ps1)                   | Dot-sourced | Validates local dependencies, required files, configuration, defaults, and optional credentials.                    |
-| [`smenu.ps1`](scripts/smenu.ps1)                                                 | Dot-sourced | Returns a value from an ordered, cursor-controlled terminal selection menu.                                        |
-| [`jsheader.ps1`](scripts/jsheader.ps1)                                           | Dot-sourced | Renders the reusable header template from root configuration, metadata, and the latest supported tag.                       |
-| [`New-MarkdownTOC.ps1`](scripts/New-MarkdownTOC.ps1)                             | Dot-sourced | Generates headings and replaces only the content inside the existing collapsible table-of-contents block.                  |
-| [`Sync-GitLabRepositoryMetadata.ps1`](scripts/Sync-GitLabRepositoryMetadata.ps1) | Direct      | Synchronizes the GitLab project description, topics, and managed project labels. Remote writes are opt-in.                 |
-| [`asciitokenizer.ps1`](scripts/asciitokenizer.ps1)                               | Dot-sourced | Tokenizes ASCII art and renders the runner header with ANSI truecolor gradients.                                           |
-| [`lazylog.ps1`](scripts/lazylog.ps1)                                             | Dot-sourced | Formats and writes the colored per-action log lines used by the runner and final report.                                   |
-
-The header generator replaces only the leading `<div align="center">...</div>` block. The table-of-contents generator preserves its surrounding `<details>...</details>` element and replaces the generated list inside it.
 
 ## GitLab project metadata
 
 ### Conceptual
 
-Remote synchronization is opt-in. The generator reads connection settings from `repo_config.json` and all descriptive project metadata from `repo_meta.json`. It requires `GITLAB_API_KEY` unless an access token is passed directly. Missing-label deletion remains disabled unless explicitly requested.
+Synchronizes remote GitLab project description, topics, and label taxonomies using definitions in `repo_meta.json`.
+- Remote operations require `GITLAB_API_KEY` (or the environment variable defined in `gitlab.tokenEnvironmentVariable`).
+- Label synchronization creates missing labels, updates matching labels (color and description), and optionally removes unmanaged remote labels when `-DeleteMissingLabels` is passed.
 
 ### Strict reference
 
-Preview remote changes:
+Preview GitLab metadata synchronization:
 
 ```powershell {title="rivet.ps1"}
-$env:GITLAB_API_KEY = '<token-from-secret-store>'
-./rivet.ps1 `
-  -SkipVersion `
-  -SkipReadmeMetadata `
-  -SkipTableOfContents `
-  -SyncGitLabMetadata `
-  -DryRun
+$env:GITLAB_API_KEY = '<token>'
+./rivet.ps1 -SyncGitLabMetadata -DryRun
 ```
 
-Apply remote metadata without deleting unmanaged labels:
+Apply GitLab metadata synchronization:
 
 ```powershell {title="rivet.ps1"}
-./rivet.ps1 `
-  -SkipVersion `
-  -SkipReadmeMetadata `
-  -SkipTableOfContents `
-  -SyncGitLabMetadata
+./rivet.ps1 -SyncGitLabMetadata
 ```
 
-## Layout
+Apply metadata synchronization and purge unmanaged remote labels:
 
-```text
-rivet/
-├── README.md
-├── rivet.psd1            # Versioned public module manifest
-├── rivet.psm1            # Curated runtime loader and export boundary
-├── help.ps1               # Colored manual and per-parameter reference
-├── run.ps1                # Public orchestration entry point
-├── templates/
-│   ├── mr.md              # Tracked seed for the ignored root merge-request document
-│   └── js/                # Generic JS configuration, CI, and README templates
-├── tests/
-│   └── Rivet.Tests.ps1   # Isolated Pester integration and unit coverage
-└── scripts/
-    ├── helpers/           # Helper library; only module allow-listed files enter runtime
-    ├── Get-RivetConfiguration.ps1
-    ├── Get-ConventionalCommitVersion.ps1
-    ├── Initialize-RivetRepository.ps1
-    ├── Invoke-RivetMenu.ps1
-    ├── Invoke-RepositoryCommit.ps1
-    ├── Invoke-RepositoryTag.ps1
-    ├── New-MarkdownTOC.ps1
-    ├── asciitokenizer.ps1
-    ├── lazylog.ps1
-    ├── smenu.ps1
-    ├── Update-JSLibSemver.ps1
-    ├── Update-ReleaseDocumentation.ps1
-    ├── Update-MergeRequestDocumentation.ps1
-    ├── Write-PrettyGitLog.ps1
-    ├── Write-RivetRepositoryStatus.ps1
-    ├── Write-RivetVersionReport.ps1
-    ├── Test-RivetRepository.ps1
-    ├── Test-ReadmeStructure.ps1
-    ├── jsheader.ps1
-    └── Sync-GitLabRepositoryMetadata.ps1
-
-repo_config.json           # Consuming repository identity, behavior, and README contract
-repo_meta.json             # Consuming repository description, topics, and labels
+```powershell {title="rivet.ps1"}
+./rivet.ps1 -SyncGitLabMetadata -DeleteMissingLabels
 ```
 
-`repo_meta.json` keeps each label's name, description, background color, and text color together. This avoids parallel arrays and removes the need to coordinate three separate catalogs.
+## Work items and issue synchronization
 
-## Execution flow
+### Conceptual
 
-```mermaid
-flowchart TD
-    A[run.ps1] --> B[Calculate Conventional Commit version]
-    A --> C[Render centered README header]
-    A --> D[Regenerate README TOC]
-    A -->|explicit switch| L[Generate release documents]
-    A -->|explicit switch| O[Generate merge request document]
-    A -->|explicit switch| E[Sync GitLab metadata]
-    A -->|explicit switch| Q[Review Conventional Commit]
-    A -->|glo exclusive mode| T[Render detailed Git history]
-    A -->|menu exclusive mode| U[Open interactive command center]
-    U --> V[Collect workflow options]
-    V --> W[Review exact runner command]
-    W -->|run| A
-    B --> F[package.json]
-    B --> G[jsr.jsonc]
-    C --> H[README.md]
-    D --> H
-    L --> M[CHANGELOG.md]
-    L --> N[release-notes.md]
-    O --> P[mr.md]
-    E --> I[repo_config.json]
-    E --> J[repo_meta.json]
-    I --> K[GitLab project topics, description, labels]
-    J --> K
-    Q -->|confirmed| R[Stage all repository changes]
-    R --> S[Create Git commit]
-    A -->|tag exclusive mode| X[Review snapshot or production tag]
-    X -->|confirmed and valid| Y[Create annotated tag]
-    Y --> Z[Push explicit tag ref]
+Rivet provides local-first issue and work item management stored in `.rivet/work-items/*.md`. This provides complete offline visibility, Git tracking, and optional bidirectional synchronization with GitLab Issues REST API.
+
+#### Work Item Document Format
+Each work item is stored as a Markdown document named with its IID and title slug (e.g. `.rivet/work-items/042-implement-responsive-tui.md` or `.rivet/work-items/draft-feature-x.md`), using the standard table format matching `templates/mr.md`:
+
+```markdown
+# Rivet Work Item
+
+Rivet Work Item Template `Version 1`
+
+|                                |                  |
+| ------------------------------ | ---------------- |
+| **Gitlab Issue IID:**          | `42`             |
+| **Gitlab Issue Link:**         | `https://gitlab.com/example/repo/-/issues/42` |
+| **Sync Action:**               | `pull`           |
+| **Status:**                    | `opened`         |
+| **Created Date:**              | `2026-08-27 21:00:00` |
+| **Last Updated Date:**         | `2026-08-27 21:15:00` |
+| **Author:**                    | `@developer`     |
+| **Milestone:**                 | `v1.2.0`         |
+| **Labels:**                    | `feature, ui`    |
+
+> [!Note]
+> Set `Sync Action:` to `pull` to refresh this issue from GitLab, or `push` to publish local changes to GitLab.
+
+---
+
+|        |                                 |
+| ------ | ------------------------------- |
+| Title: | `Implement responsive TUI layout` |
+
+## **Description**
+
+Provide automatic dual-column layout on wide terminals.
+
+## **Acceptance Criteria**
+
+- [ ] Columns switch dynamically when terminal width exceeds 110 characters.
+- [ ] Viewport height gracefully contracts when console rows decrease.
+
+## **Technical Notes**
+
+- Memory and layout caching managed via `rivet_cache.ps1`.
+```
+
+#### Sync Operations & Task Management
+- **`List` (`rivet tasks` / `rivet work-items`)**: Scans local `.rivet/work-items/` and renders a clean TUI summary table displaying IID, sync direction (`[PULL]` / `[PUSH]`), state badge (`[OPEN]` / `[CLOSED]`), title, and labels.
+- **`View` (`rivet work-items -View -Iid 42`)**: Displays full work item details, description, acceptance criteria, and notes formatted in console.
+- **`Close` (`rivet work-items -Close -Iid 42`)**: Closes a work item locally, flags it for push sync (`Sync Action: push`), and regenerates the `.rivet/workitems-list.md` task tracker.
+- **`Reopen` (`rivet work-items -Reopen -Iid 42`)**: Reopens a closed work item, flags it for push sync, and regenerates the task tracker.
+- **`Template` / `New` (`rivet work-items -Template -Iid 42`)**: Scaffolds a new work item template with metadata tables. If an IID is supplied, it defaults `Sync Action: pull` so running pull downloads only that issue.
+- **`Pull` (`rivet work-items -PullIssues -Iid 42`)**: When an IID is supplied (or when local items are marked `Sync Action: pull`), fetches *only those targeted work items and discussion notes* from GitLab via REST API.
+- **`Push` (`rivet work-items -PushIssues`)**: Scans local files and publishes only items marked `Sync Action: push` to GitLab, updating remote issue title, description, and state, and resetting `Sync Action` to `pull`.
+- **`GenerateList` (`rivet tasklist` / `rivet work-items -GenerateList`)**: Rebuilds the aggregated `.rivet/workitems-list.md` dashboard index from local work items.
+
+### Strict reference
+
+List all local tasks / work items:
+
+```powershell {title="rivet.ps1"}
+./rivet.ps1 tasks
+./rivet.ps1 work-items
+```
+
+View a specific work item in terminal:
+
+```powershell {title="rivet.ps1"}
+./rivet.ps1 work-items -View -Iid 42
+```
+
+Close or reopen an issue locally:
+
+```powershell {title="rivet.ps1"}
+./rivet.ps1 work-items -Close -Iid 42
+./rivet.ps1 work-items -Reopen -Iid 42
+```
+
+Scaffold a new local work item template targeting issue #42:
+
+```powershell {title="rivet.ps1"}
+./rivet.ps1 work-items -Template -Iid 42 -IssueTitle 'Add completion report card' -IssueLabels 'feature','ui'
+```
+
+Pull only a specific issue (#42) from GitLab:
+
+```powershell {title="rivet.ps1"}
+./rivet.ps1 work-items -PullIssues -Iid 42
+```
+
+Push modified local work items marked with `Sync Action: push`:
+
+```powershell {title="rivet.ps1"}
+./rivet.ps1 work-items -PushIssues -DryRun
+./rivet.ps1 work-items -PushIssues
+```
+
+Regenerate aggregated task tracker dashboard:
+
+```powershell {title="rivet.ps1"}
+./rivet.ps1 tasklist
+./rivet.ps1 work-items -GenerateList
+```
+
+## Generic CLI & API caching engine (`rivet_cache.ps1`)
+
+### Conceptual
+
+Rivet includes a standalone, high-performance, zero-dependency caching utility (`scripts/helpers/cache/rivet_cache.ps1`) purpose-built for CLI and API applications to reduce remote endpoint load and capture operational telemetry:
+- **Tiered Storage**: Supports fast in-memory caching with persistent file-backed JSON storage under `.rivet/cache/`.
+- **TTL Expiration**: Configurable Time-To-Live duration per entry or global default (e.g. 15 minutes for issues, 1 hour for metadata).
+- **Tag-Based Invalidation**: Invalidate groups of cached entries by tag (e.g. `Remove-RivetCache -Tag gitlab_issues`).
+- **Telemetry & Metrics**: Tracks requests, cache hits, misses, hit-rate percentage, average read/write duration in milliseconds, and total disk storage in bytes via `Get-RivetCacheMetrics`.
+- **Execution Wrapper**: `Invoke-RivetCachedOperation -Key <key> -TtlSeconds 300 -ScriptBlock { ... }` simplifies caching around any arbitrary API call or script block.
+
+### Strict reference
+
+```powershell
+. ./scripts/helpers/cache/rivet_cache.ps1
+Initialize-RivetCache -CacheDirectory ./.rivet/cache -DefaultTtlSeconds 1800
+$user = Invoke-RivetCachedOperation -Key 'gl_user_42' -TtlSeconds 900 -ScriptBlock {
+    Invoke-RestMethod -Uri 'https://gitlab.com/api/v4/users/42'
+}
+$metrics = Get-RivetCacheMetrics
+```
+
+## Generic completion report card and pipeline reporting
+
+### Conceptual
+
+Rivet implements a zero-tear ASCII TUI completion report card (`Write-RivetReportCard.ps1`) for all CLI actions and multi-action workflows (`[MA]`):
+- **Orange-to-Offblack Gradient Borders**: Renders clean rounded borders with truecolor RGB transitions (`RGB(255, 130, 0)` -> `RGB(40, 44, 54)`).
+- **Responsive Width Adaptation**: Automatically adjusts box width to terminal size while preserving strict inner line wrapping.
+- **Word-Boundary Paragraph Wrapping**: Long execution details and metadata items wrap cleanly at word boundaries using `Split-SMenuText`.
+- **Status Badging**: Visual status indicators (`[SUC]`, `[ACT]`, `[SKIP]`, `[FAIL]`, `[WRN]`, `[INF]`).
+- **Compound Action Support (`-Raw`)**: Subroutines inside compound workflows (`PrepRelease`, `Bootstrap`, `Init`, `RebuildChangelog`) pass `-Raw` to suppress intermediate inner report cards and emit one unified report card at completion. Passing `-Raw` at the CLI returns a structured `[pscustomobject]` report data model for scripting and CI pipelines.
+
+### Strict reference
+
+Execute release preparation with formatted visual report card:
+
+```powershell {title="rivet.ps1"}
+./rivet.ps1 prep-release -DryRun
+```
+
+Execute release preparation in silent raw data mode:
+
+```powershell {title="rivet.ps1"}
+$result = ./rivet.ps1 prep-release -Raw -DryRun
+$result.Success
+$result.Rows
 ```
 
 ## Static site generator integration (Hugo, 11ty, Jekyll)
 
 ### Conceptual
 
-Rivet exports structured data directly consumed by static site generators (SSGs) such as Hugo, Eleventy (11ty), and Jekyll:
-
-1. **`docs/data/changelog.json`**: Generated when running `./rivet.ps1 -UpdateReleaseDocs -UpdateChangelogJson` or during release preparation (`prep-release`). It projects every version and note from `CHANGELOG.md`, enriched with commit hashes, categories, scopes, and mapped GitLab authors when Git metadata is available.
-2. **`docs/data/releases.json`**: Generated by the release pipeline or `Get-ReleaseDownloads.ps1`. It catalogues tagged releases, asset download URLs, checksums, archive links, and bundle variants (minified vs unminified).
+Rivet outputs machine-readable JSON data consumable by static site generators:
+- **`docs/data/changelog.json`**: Generated during release document operations (`-UpdateChangelogJson` or `rebuild-changelog`). Contains structured records for all versions, entries, scopes, commit URLs, and author metadata.
+- **`docs/data/releases.json`**: Catalogues tagged releases, archive links, and compiled asset artifacts.
 
 ### Hugo
 
-Hugo automatically loads JSON files located in `docs/data/` (or `data/`) into the global `site.Data` context.
+Hugo loads JSON files located in `docs/data/` directly into `site.Data`.
 
-#### Changelog Shortcode (`layouts/shortcodes/changelog-data.html`)
-
-```html
+```html {title="layouts/shortcodes/changelog-data.html"}
 {{ with site.Data.changelog }}
 <div class="changelog-data" data-changelog-source="{{ .source.canonical_record }}">
   {{ range .versions }}
@@ -510,31 +601,11 @@ Hugo automatically loads JSON files located in `docs/data/` (or `data/`) into th
 {{ end }}
 ```
 
-#### Downloads Shortcode (`layouts/shortcodes/release-downloads.html`)
-
-```html
-{{ with site.Data.releases }}
-  {{ range .versions }}
-    <section class="download-version">
-      <h2>{{ .version }}</h2>
-      <a href="{{ .source_url }}">Source archive</a>
-      <div class="download-assets">
-        {{ range .assets }}
-          <a href="{{ .url }}">{{ .name }} ({{ .size }} bytes)</a>
-        {{ end }}
-      </div>
-    </section>
-  {{ end }}
-{{ end }}
-```
-
 ### Eleventy (11ty)
 
-Eleventy exposes files in the global `_data/` directory (e.g. `_data/changelog.json` and `_data/releases.json`) to all templates. Configure `eleventyConfig.addPassthroughCopy` or point Eleventy's data directory to `docs/data`.
+Eleventy exposes files in the global data directory (`_data/` or mapped `docs/data/`) to Nunjucks and Liquid templates.
 
-#### Nunjucks / Liquid Template (`changelog.njk`)
-
-```html
+```html {title="changelog.njk"}
 <div class="changelog-data">
   {% for release in changelog.versions %}
     <section class="changelog-release">
@@ -557,11 +628,9 @@ Eleventy exposes files in the global `_data/` directory (e.g. `_data/changelog.j
 
 ### Jekyll
 
-Jekyll automatically parses JSON files in the `_data/` folder and exposes them via `site.data.changelog` and `site.data.releases`.
+Jekyll parses `_data/changelog.json` into `site.data.changelog`.
 
-#### Liquid Layout / Include (`_includes/changelog.html`)
-
-```html
+```html {title="_includes/changelog.html"}
 <div class="changelog-data">
   {% for release in site.data.changelog.versions %}
     <section class="changelog-release">
@@ -582,80 +651,219 @@ Jekyll automatically parses JSON files in the `_data/` folder and exposes them v
 </div>
 ```
 
+## Architecture and layout
+
+### Directory Structure
+
+```text
+rivet/
+├── README.md
+├── rivet.psd1            # Versioned module manifest
+├── rivet.psm1            # Runtime loader and public export boundary
+├── help.ps1               # Terminal manual and parameter lookup
+├── run.ps1                # Positional CLI router and runner entry point
+├── templates/
+│   ├── mr.md              # Template for working merge request document
+│   └── js/                # Standard JavaScript, Bun, CI, and config templates
+├── tests/
+│   └── Rivet.Tests.ps1   # Pester unit and integration test suite
+└── scripts/
+    ├── helpers/           # Internal helper libraries
+    │   ├── data_utils/
+    │   │   └── Resolve-RivetPath.ps1
+    │   ├── ui/
+    │   │   └── Write-RivetReportCard.ps1
+    │   └── flowgraph/     # Flowgraph rendering engine
+    ├── Get-RivetConfiguration.ps1
+    ├── Get-ConventionalCommitVersion.ps1
+    ├── Initialize-RivetRepository.ps1
+    ├── Invoke-RivetMenu.ps1
+    ├── Invoke-RepositoryCommit.ps1
+    ├── Invoke-RepositoryTag.ps1
+    ├── Invoke-GitLabMergeRequest.ps1
+    ├── Sync-RivetWorkItems.ps1
+    ├── New-MarkdownTOC.ps1
+    ├── asciitokenizer.ps1
+    ├── lazylog.ps1
+    ├── smenu.ps1
+    ├── Update-JSLibSemver.ps1
+    ├── Update-ReleaseDocumentation.ps1
+    ├── Update-MergeRequestDocumentation.ps1
+    ├── Write-PrettyGitLog.ps1
+    ├── Write-RivetRepositoryStatus.ps1
+    ├── Write-RivetVersionReport.ps1
+    ├── Test-RivetRepository.ps1
+    ├── Test-ReadmeStructure.ps1
+    ├── jsheader.ps1
+    └── Sync-GitLabRepositoryMetadata.ps1
+
+.rivet/                    # Consuming repository automation directory
+├── repo_config.json       # Project identity, paths, and contracts
+├── repo_meta.json         # Project description, topics, and label catalogs
+├── mr.md                  # Working merge request document
+└── work-items/            # Local structured Markdown work items
+    └── *.md               # Individual issue specifications with frontmatter
+```
+
+### Script Responsibilities
+
+| Script | Type | Responsibility |
+| --- | --- | --- |
+| [`run.ps1`](run.ps1) | Entry | Primary CLI orchestrator, parameter routing, and LazyLog reporting. |
+| [`rivet.psd1`](rivet.psd1) | Manifest | Declares module metadata and exported command surface. |
+| [`rivet.psm1`](rivet.psm1) | Loader | Dot-sources runtime helper allow-list and controls public visibility. |
+| [`help.ps1`](help.ps1) | Manual | Renders formatted terminal manual and parameter documentation. |
+| [`Resolve-RivetPath.ps1`](scripts/helpers/data_utils/Resolve-RivetPath.ps1) | Helper | Resolves canonical `.rivet/` artifact paths with transparent fallback to repository root. |
+| [`Write-RivetReportCard.ps1`](scripts/helpers/ui/Write-RivetReportCard.ps1) | UI Engine | Renders non-tear ASCII TUI completion report cards with orange gradient borders and `-Raw` support. |
+| [`Sync-RivetWorkItems.ps1`](scripts/Sync-RivetWorkItems.ps1) | Engine | Manages local `.rivet/work-items/*.md` and bidirectional synchronization with GitLab Issues REST API. |
+| [`Initialize-RivetRepository.ps1`](scripts/Initialize-RivetRepository.ps1) | Engine | Scaffolds `.rivet/` configuration and templates for npm or Bun environments. |
+| [`Test-RivetRepository.ps1`](scripts/Test-RivetRepository.ps1) | Diagnostics | Executes read-only validation of tooling, runtimes, Git identity, manifests, and contracts. |
+| [`Get-ConventionalCommitVersion.ps1`](scripts/Get-ConventionalCommitVersion.ps1) | Engine | Computes SemVer increments from commit history. |
+| [`Update-JSLibSemver.ps1`](scripts/Update-JSLibSemver.ps1) | Engine | Synchronizes version strings in `package.json`, `jsr.jsonc`, and `package-lock.json`. |
+| [`Update-ReleaseDocumentation.ps1`](scripts/Update-ReleaseDocumentation.ps1) | Engine | Generates marker-bounded changelogs and release notes. |
+| [`Update-MergeRequestDocumentation.ps1`](scripts/Update-MergeRequestDocumentation.ps1) | Engine | Generates `mr.md` with Conventional Commit bump type in the title. |
+| [`Invoke-GitLabMergeRequest.ps1`](scripts/Invoke-GitLabMergeRequest.ps1) | Integration | Creates and updates GitLab MRs, writing back assigned IIDs and web links. |
+| [`Invoke-RepositoryCommit.ps1`](scripts/Invoke-RepositoryCommit.ps1) | Workflow | Interactively reviews, stages, and commits Conventional Commits. |
+| [`Invoke-RepositoryTag.ps1`](scripts/Invoke-RepositoryTag.ps1) | Workflow | Validates, creates, and pushes annotated release or snapshot tags. |
+| [`Write-PrettyGitLog.ps1`](scripts/Write-PrettyGitLog.ps1) | Inspection | Formats dense terminal Git history with summary statistics. |
+| [`Show-RivetFlowGraph.ps1`](scripts/Show-RivetFlowGraph.ps1) | Visualization | Renders interactive ASCII pipeline lifecycle flow graphs using the Flowgraph engine. |
+| [`smenu.ps1`](scripts/smenu.ps1) | UI Engine | Terminal UI selection engine with responsive layouts and truecolor ANSI rendering. |
+| [`Sync-GitLabRepositoryMetadata.ps1`](scripts/Sync-GitLabRepositoryMetadata.ps1) | Integration | Synchronizes project description, topics, and labels to GitLab REST API. |
+
+### Execution Workflow
+
+```mermaid
+flowchart TD
+    A[run.ps1] --> B[Calculate Conventional Commit SemVer]
+    A --> C[Render centered README header]
+    A --> D[Regenerate README TOC]
+    A -->|prep-release| PREP[Stage full release metadata]
+    A -->|init / bootstrap| INIT[Scaffold npm / Bun templates]
+    A -->|doctor| DOC[Execute diagnostic health checks]
+    A -->|work-items| WORK[Sync / Manage local work items & issues]
+    A -->|rebuild-changelog| REBUILD[Rebuild changelog across all tags]
+    A -->|explicit switch| L[Generate release documentation]
+    A -->|explicit switch| O[Generate merge request mr.md]
+    A -->|explicit switch| MR_API[Create or Update GitLab MR]
+    A -->|explicit switch| E[Sync GitLab project metadata]
+    A -->|explicit switch| Q[Review Conventional Commit]
+    A -->|glo mode| T[Render dense Git history]
+    A -->|menu mode| U[Open interactive command center]
+    U --> V[Select workflow options]
+    V --> W[Review exact CLI command]
+    W -->|execute| A
+    B --> F[package.json]
+    B --> G[jsr.jsonc]
+    B --> PL[package-lock.json]
+    C --> H[README.md]
+    D --> H
+    L --> M[CHANGELOG.md]
+    L --> N[release-notes.md]
+    L --> CJ[docs/data/changelog.json]
+    O --> P[.rivet/mr.md]
+    MR_API -->|write back IID & link| P
+    WORK --> WI[.rivet/work-items/*.md]
+    WORK <--> GL_ISSUES[GitLab Issues REST API]
+    INIT -->|Bun switch| BUN[bunfig.toml & bun.lock]
+    INIT --> F
+    INIT --> RIVET_DIR[.rivet/ directory]
+    E --> I[.rivet/repo_config.json]
+    E --> J[.rivet/repo_meta.json]
+    I --> K[GitLab API: description, topics, labels]
+    J --> K
+    Q -->|confirmed| R[Stage reviewed paths]
+    R --> S[Create Git commit]
+    A -->|tag mode| X[Validate worktree, upstream, manifests]
+    X -->|valid and confirmed| Y[Create annotated Git tag]
+    Y --> Z[Push branch & tag atomically]
+```
+
 ## API Reference
 
-| Parameter             | Type                 | Default | Description                                                                              |
-| --------------------- | -------------------- | ------- | ---------------------------------------------------------------------------------------- |
-| `Command`             | `string`             | unset   | Supports `help`, `menu`, `init`, `bootstrap`, `prep-release`, `doctor`, `status`, `version`, and `readme`. |
-| `Help`                | `switch`             | `false` | Opens the manual overview and exits without running metadata actions.                     |
-| `Menu`                | `switch`             | `false` | Opens the reviewed interactive command center and exits normal runner initialization.     |
-| `Init`                | `switch`             | `false` | Creates or validates repository-root configuration without replacing existing files.      |
-| `Bootstrap`           | `switch`             | `false` | Initializes root configuration and then synchronizes configured GitLab metadata.           |
-| `PrepRelease`         | `switch`             | `false` | Runs manifests, README, release-document, and merge-request preparation together.           |
-| `Doctor`              | `switch`             | `false` | Runs read-only dependency and configuration checks.                                       |
-| `Status`              | `switch`             | `false` | Shows read-only repository and release state.                                              |
-| `VersionReport`       | `switch`             | `false` | Explains the stable baseline and Conventional Commit bump inputs.                          |
-| `ValidateReadme`      | `switch`             | `false` | Runs the exclusive required-heading report.                                                |
-| `HelpParameter` / `Param` | `string`          | unset   | Opens detailed help for one runner parameter or alias.                                    |
-| `SkipVersion`         | `switch`             | `false` | Skips Conventional Commit version calculation and package manifest synchronization.      |
-| `SkipReadmeMetadata`  | `switch`             | `false` | Skips centered README project-header generation.                                         |
-| `SkipTableOfContents` | `switch`             | `false` | Skips canonical README table-of-contents generation.                                     |
-| `SkipReadmeValidation` | `switch`            | `false` | Skips the required-heading contract during the default run.                               |
-| `UpdateReleaseDocs`   | `switch`             | `false` | Updates marker-bounded draft changelog and release-note content.                         |
-| `FinalizeRelease`     | `switch`             | `false` | Generates release documents under the dated version heading; implies release-doc update. |
-| `RebuildChangelog`    | `switch`             | `false` | Rebuilds entire `CHANGELOG.md` and `docs/data/changelog.json` across all Git tags.       |
-| `UpdateChangelogJson` | `switch`             | `false` | Generates curated `docs/data/changelog.json` structured projection from `CHANGELOG.md`.   |
-| `UpdateMergeRequest`  | `switch`             | `false` | Updates generated fields and the managed change list in `mr.md`.                          |
-| `CreateGitLabMergeRequest` | `switch`        | `false` | Creates a GitLab merge request from `mr.md`; rejects a duplicate open branch pair.         |
-| `UpdateGitLabMergeRequest` | `switch`        | `false` | Updates the matching open GitLab merge request from `mr.md`.                               |
-| `ReleaseVersion`      | `string`             | package version | Overrides the version displayed in generated release documents.                     |
-| `FromTag`             | `string`             | action-specific | Uses a reachable historical ref; release documents use the latest GitLab release, while `mr.md` uses the latest stable tag. |
-| `MergeTargetBranch`   | `string`             | `main`  | Sets the target branch displayed in generated `mr.md`.                                    |
-| `IncludeCommitHash`   | `switch`             | `true`  | Adds each short commit hash to generated change-list items; `:$false` disables it.        |
-| `IncludeAuthor`       | `switch`             | `true`  | Adds each author after the commit hash; `:$false` disables it.                            |
-| `SyncGitLabMetadata`  | `switch`             | `false` | Enables remote GitLab topics, description, and label synchronization.                    |
-| `DeleteMissingLabels` | `switch`             | `false` | Deletes remote labels absent from the catalog; effective only with `SyncGitLabMetadata`. |
-| `Commit`              | `switch`             | `false` | Opens the review workflow after successful runner actions.                               |
-| `CommitType`          | `string`             | interactive/configured | Bypasses type selection with a Conventional Commit type.                         |
-| `CommitScope`         | `string`             | interactive/configured | Bypasses scope selection; `none` omits the scope.                                |
-| `CommitDescription`   | `string`             | interactive/configured | Bypasses the description prompt with a single-line description.                  |
-| `CommitFiles`         | `string[]`           | interactive selection | Selects exact changed paths to stage and commit.                                          |
-| `CommitAll`           | `switch`             | `false` | Selects every changed path while retaining review and confirmation.                       |
-| `Tag`                 | `switch`             | `false` | Runs the exclusive reviewed tag creation and push workflow.                               |
-| `Snapshot`            | `switch`             | `false` | Creates a plain SemVer validation tag; requires `Tag`.                                    |
-| `TagForce`            | `switch`             | `false` | Allows non-interactive publication while retaining all safety checks.                     |
-| `TagVersion`          | `string`             | calculated | Overrides the tag version with stable MAJOR.MINOR.PATCH; requires `Tag`.                |
-| `GitLog` / `glo`      | `switch`             | `false` | Runs the exclusive read-only detailed Git history view.                                   |
-| `GitLogCount`         | `integer`            | `25`    | Limits history output from 1 through 500 commits.                                         |
-| `GitLogAll`           | `switch`             | `false` | Reads commits reachable from all local and remote refs.                                   |
-| `GitLogNoMerges`      | `switch`             | `false` | Omits merge commits from history output.                                                  |
-| `RepositoryRoot`      | `string`             | current directory | Selects the consuming Git repository independently of the rivet checkout.       |
-| `ConfigPath`          | `string`             | root `repo_config.json` | Overrides configuration discovery without changing repository discovery.        |
-| `DryRun`              | `switch`             | `false` | Reports local and remote changes without applying them.                                  |
-| `GITLAB_API_KEY`      | environment variable | unset   | GitLab token used only when remote synchronization is requested.                         |
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `Command` | `string` | unset | Positional command: `help`, `menu`, `init`, `bootstrap`, `prep-release`, `doctor`, `status`, `version`, `readme`, `commit`, `tag`, `history`, `glo`, `rebuild-changelog`, `flow`, `pipeline`, `work-items`, `issues`, `sync-issues`. |
+| `Help` | `switch` | `false` | Displays terminal manual overview and exits. |
+| `Menu` | `switch` | `false` | Launches the interactive TUI command center. |
+| `Init` | `switch` | `false` | Scaffolds missing `.rivet/` configuration from templates without replacing existing files. |
+| `Bootstrap` | `switch` | `false` | Scaffolds configuration and synchronizes GitLab project metadata. |
+| `Bun` | `switch` | `false` | Includes Bun runtime templates (`bunfig.toml`, `bun.lock`) during initialization. |
+| `PrepRelease` | `switch` | `false` | Executes full release preparation (manifests, README, changelog, release notes, `mr.md`). |
+| `Doctor` | `switch` | `false` | Executes read-only repository, tooling, runtime, Git identity, manifest, and contract validation. |
+| `Status` | `switch` | `false` | Displays read-only repository state, upstream tracking, version, and tag status. |
+| `VersionReport` | `switch` | `false` | Outputs baseline tag, commit range, and per-commit Conventional Commit bump inputs. |
+| `ValidateReadme` | `switch` | `false` | Executes required-heading contract verification against `README.md`. |
+| `FlowGraph` / `Flow` / `Pipeline` | `switch` | `false` | Renders interactive ASCII Flowgraph of Rivet automation lifecycle. |
+| `WorkItems` / `Issues` | `switch` | `false` | Manages local work items and connects to GitLab Issues API. |
+| `SyncWorkItems` | `switch` | `false` | Synchronizes local work items with remote GitLab issues. |
+| `PullIssues` | `switch` | `false` | Pulls remote GitLab issues into local `.rivet/work-items/`. |
+| `PushIssues` | `switch` | `false` | Pushes local `.rivet/work-items/` to remote GitLab issues. |
+| `ListIssues` | `switch` | `false` | Lists local work items in a formatted TUI table. |
+| `NewIssue` | `switch` | `false` | Scaffolds a new local work item template in `.rivet/work-items/`. |
+| `IssueTitle` | `string` | unset | Title for a new or updated work item. |
+| `IssueDescription` | `string` | unset | Body description for a new or updated work item. |
+| `IssueLabels` | `string[]` | unset | Label taxonomy for a new or updated work item. |
+| `HelpParameter` / `Param` | `string` | unset | Displays detailed documentation for a specific parameter or alias. |
+| `SkipVersion` | `switch` | `false` | Skips SemVer version calculation and package manifest synchronization. |
+| `SkipReadmeMetadata` | `switch` | `false` | Skips centered `README.md` header generation. |
+| `SkipTableOfContents` | `switch` | `false` | Skips canonical `README.md` table of contents generation. |
+| `SkipReadmeValidation` | `switch` | `false` | Skips required-heading contract validation during multi-action runs. |
+| `UpdateReleaseDocs` | `switch` | `false` | Updates marker-bounded draft changelog and release notes. |
+| `FinalizeRelease` | `switch` | `false` | Finalizes release documentation under the dated version heading. |
+| `RebuildChangelog` / `Rebuild` | `switch` | `false` | Rebuilds `CHANGELOG.md` and `docs/data/changelog.json` across all Git tags from history. |
+| `UpdateChangelogJson` | `switch` | `false` | Generates structured `docs/data/changelog.json` projection from `CHANGELOG.md`. |
+| `UpdateMergeRequest` | `switch` | `false` | Generates or updates `mr.md` with Conventional Commit bump type in the title. |
+| `CreateGitLabMergeRequest` | `switch` | `false` | Creates GitLab MR from `mr.md` and writes back assigned IID and URL. |
+| `UpdateGitLabMergeRequest` | `switch` | `false` | Updates matching open GitLab MR title and description from `mr.md`. |
+| `ReleaseVersion` | `string` | calculated | Overrides version string displayed in generated release documents. |
+| `FromTag` | `string` | baseline ref | Overrides baseline Git ref for release notes and changelog parsing. |
+| `MergeTargetBranch` | `string` | `main` | Specifies target branch recorded in generated `mr.md`. |
+| `IncludeCommitHash` | `switch` | `true` | Appends linked short commit hashes to generated change items (`:$false` to omit). |
+| `IncludeAuthor` | `switch` | `true` | Appends author mentions to generated change items (`:$false` to omit). |
+| `SyncGitLabMetadata` | `switch` | `false` | Synchronizes project description, topics, and managed labels to GitLab. |
+| `DeleteMissingLabels` | `switch` | `false` | Purges remote GitLab labels not present in `repo_meta.json` during sync. |
+| `Commit` | `switch` | `false` | Opens interactive Conventional Commit staging and review workflow. |
+| `CommitType` | `string` | interactive | Sets Conventional Commit type (`feat`, `fix`, `docs`, etc.). |
+| `CommitScope` | `string` | interactive | Sets Conventional Commit scope (`core`, `cli`, `ui`, `none`, etc.). |
+| `CommitDescription` | `string` | interactive | Sets commit subject description line. |
+| `CommitFiles` | `string[]` | interactive | Explicit list of repository-relative paths to stage and commit. |
+| `CommitAll` | `switch` | `false` | Selects all modified repository paths for commit review. |
+| `Tag` | `switch` | `false` | Executes reviewed Git tag creation and push workflow. |
+| `Snapshot` | `switch` | `false` | Creates plain SemVer tag (`v1.0.0`) without `-release` suffix; requires `Tag`. |
+| `TagForce` | `switch` | `false` | Bypasses final interactive tag confirmation prompt while enforcing all safety checks. |
+| `TagVersion` | `string` | calculated | Overrides version string for tag creation; requires `Tag`. |
+| `GitLog` / `glo` | `switch` | `false` | Executes dense read-only graphical Git commit history viewer. |
+| `GitLogCount` | `integer` | `25` | Sets maximum commit count displayed in history (range 1-500). |
+| `GitLogAll` | `switch` | `false` | Traverses commits reachable from all local and remote refs. |
+| `GitLogNoMerges` | `switch` | `false` | Omits merge commits from history output. |
+| `RepositoryRoot` | `string` | current dir | Path to target consuming Git repository root directory. |
+| `ConfigPath` | `string` | root config | Explicit path to `repo_config.json` configuration file. |
+| `DryRun` | `switch` | `false` | Simulates actions and previews outputs without writing files or remote APIs. |
+| `Raw` | `switch` | `false` | Suppresses visual TUI report cards and returns structured data objects. |
+| `GITLAB_API_KEY` | env var | unset | Environment variable containing GitLab API personal/project access token. |
 
-Every operation writes an activity message before work starts and a success or failure message when it ends. The final report repeats the outcome of each operation using green for completion, gray for skipped work, and red for failures. Padding is calculated before ANSI encoding. `Format-LazyLog` returns a composable string, while `Write-LazyLog` emits the live action messages.
+## Configuration Reference
 
-### Configuration Reference
-
-| File               | Field                   | Type       | Description                                                                                                        |
-| ------------------ | ----------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
-| `repo_config.json` | `project`               | `object`   | Project name, display name, namespace, repository/artifact paths, packages, branch, banner, and documentation URL. |
-| `repo_config.json` | `readmeHeader`          | `object`   | Header alignment, badge style, colors, and Codecov token used by `jsheader.ps1`.                                  |
-| `repo_config.json` | `readme.requiredHeadings` | `object[]` | Required Markdown heading level/name pairs validated by `readme` and default runs.                             |
-| `repo_config.json` | `commit.defaultType`    | `string`   | Initially selected type in the interactive commit menu.                                                          |
-| `repo_config.json` | `commit.defaultScope`   | `string`   | Initially selected scope in the interactive commit menu.                                                         |
-| `repo_config.json` | `commit.defaultDescription` | `string` | Description used when the prompt is accepted without input.                                                   |
-| `repo_config.json` | `authors.mappings`     | `array`    | Maps Git author email addresses to GitLab usernames for reliable profile mentions.                            |
-| `repo_config.json` | `commit.types`          | `object[]` | Ordered type names and menu descriptions.                                                                        |
-| `repo_config.json` | `commit.scopes`         | `object[]` | Ordered scope names and menu descriptions; include `none` to support an unscoped subject.                         |
-| `repo_config.json` | `tagging.prefix`        | `string`   | Prefix prepended to tag versions; defaults to `v`.                                                              |
-| `repo_config.json` | `tagging.releaseSuffix` | `string`  | Suffix appended to production tags; configured as `-release`.                                                 |
-| `repo_config.json` | `tagging.remote`        | `string`   | Git remote receiving the explicit new tag ref.                                                                  |
-| `repo_config.json` | `gitlab`                | `object`   | GitLab base URI, project ID, and token environment-variable name.                                                  |
-| `repo_config.json` | `metadataSource`        | `string`   | Metadata file path relative to the configuration file.                                                             |
-| `repo_config.json` | `labelScope`            | `string`   | Supported value is `project`.                                                                                      |
-| `repo_config.json` | `requestTimeoutSeconds` | `integer`  | GitLab API request timeout.                                                                                        |
-| `repo_meta.json`   | `project.description`   | `string`   | Shared README header and GitLab project description; must begin with the configured display name followed by `is`. |
-| `repo_meta.json`   | `project.topics`        | `string[]` | Authoritative GitLab topic list.                                                                                   |
-| `repo_meta.json`   | `labels`                | `object[]` | Managed label name, description, background color, and text color records.                                         |
+| File | Property | Type | Description |
+| --- | --- | --- | --- |
+| `repo_config.json` | `project` | `object` | Defines project name, display name, namespace, project paths, default branch, package names, banner URL, and docs URL. |
+| `repo_config.json` | `readmeHeader` | `object` | Controls header alignment (`left`/`center`), badge styling, hex colors, and Codecov token. |
+| `repo_config.json` | `readme.requiredHeadings` | `object[]` | Array of required Markdown heading level and name objects (`level`, `name`) validated by `doctor` and `readme`. |
+| `repo_config.json` | `commit.defaultType` | `string` | Default Conventional Commit type pre-selected in interactive menus. |
+| `repo_config.json` | `commit.defaultScope` | `string` | Default Conventional Commit scope pre-selected in interactive menus. |
+| `repo_config.json` | `commit.defaultDescription` | `string` | Fallback commit description when prompt is accepted without input. |
+| `repo_config.json` | `authors.mappings` | `array` | Maps Git author emails to GitLab usernames for profile link generation. |
+| `repo_config.json` | `commit.types` | `object[]` | Catalog of allowed Conventional Commit types with descriptions. |
+| `repo_config.json` | `commit.scopes` | `object[]` | Catalog of allowed commit scopes with associated file path matching patterns. |
+| `repo_config.json` | `tagging.prefix` | `string` | Prefix prepended to SemVer release tags (default: `v`). |
+| `repo_config.json` | `tagging.releaseSuffix` | `string` | Suffix appended to production release tags (default: `-release`). |
+| `repo_config.json` | `tagging.remote` | `string` | Target Git remote name receiving published tags (default: `origin`). |
+| `repo_config.json` | `gitlab.apiUrl` | `string` | GitLab REST API endpoint base URI (e.g. `https://gitlab.com/api/v4`). |
+| `repo_config.json` | `gitlab.projectId` | `string` | URL-encoded or numerical GitLab project path/identifier. |
+| `repo_config.json` | `gitlab.tokenEnvironmentVariable` | `string` | Name of the environment variable providing the GitLab access token (default: `GITLAB_API_KEY`). |
+| `repo_config.json` | `metadataSource` | `string` | Relative path from `repo_config.json` to project metadata catalog (default: `repo_meta.json`). |
+| `repo_config.json` | `labelScope` | `string` | Scope for managed GitLab labels (`project`). |
+| `repo_config.json` | `requestTimeoutSeconds` | `integer` | Timeout in seconds for GitLab REST API HTTP requests. |
+| `repo_meta.json` | `project.description` | `string` | Authoritative project description used for README headers and GitLab repository profile. |
+| `repo_meta.json` | `project.topics` | `string[]` | Array of GitLab project repository topic strings. |
+| `repo_meta.json` | `labels` | `object[]` | Catalog of managed GitLab label objects (`name`, `description`, `color`, `text_color`). |

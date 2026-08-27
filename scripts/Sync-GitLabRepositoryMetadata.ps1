@@ -165,14 +165,25 @@ function New-LabelBody {
 if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
     $gitRoot = @(& git -C $PSScriptRoot rev-parse --show-toplevel 2>$null)
     if ($LASTEXITCODE -ne 0 -or -not $gitRoot.Count) { throw 'Unable to resolve the consuming Git repository root.' }
-    $ConfigPath = [System.IO.Path]::Combine(([string]$gitRoot[0]).Trim(), 'repo_config.json')
+    $resolvedRoot = ([string]$gitRoot[0]).Trim()
+    $ConfigPath = Resolve-RivetPath -RepositoryRoot $resolvedRoot -ItemName 'repo_config.json'
 }
 $configFullPath = [System.IO.Path]::GetFullPath($ConfigPath)
 $config = Read-JsonFile -Path $configFullPath
 $configDirectory = [System.IO.Path]::GetDirectoryName($configFullPath)
 $gitlab = Get-JsonProperty -Object $config -Name 'gitlab'
 $projectConfig = Get-JsonProperty -Object $config -Name 'project'
-$metadataSource = Resolve-PathFrom -BasePath $configDirectory -Path (Get-JsonString -Object $config -Name 'metadataSource' -Default 'repo_meta.json')
+$metaSourceRaw = Get-JsonString -Object $config -Name 'metadataSource' -Default 'repo_meta.json'
+$metadataSource = if ([System.IO.Path]::IsPathRooted($metaSourceRaw)) {
+    [System.IO.Path]::GetFullPath($metaSourceRaw)
+} else {
+    $resolvedMeta = Resolve-RivetPath -RepositoryRoot (Split-Path (Split-Path $configFullPath -Parent) -Parent) -ItemName $metaSourceRaw
+    if ([System.IO.File]::Exists($resolvedMeta)) {
+        $resolvedMeta
+    } else {
+        Resolve-PathFrom -BasePath $configDirectory -Path $metaSourceRaw
+    }
+}
 $metadata = Read-JsonFile -Path $metadataSource
 $projectMetadata = Get-JsonProperty -Object $metadata -Name 'project'
 $labels = Get-JsonProperty -Object $metadata -Name 'labels'

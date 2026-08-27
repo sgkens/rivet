@@ -34,7 +34,7 @@ function Update-JSHeader {
     if (-not [System.IO.File]::Exists($readmePath)) { throw "README not found: $readmePath" }
 
     if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
-        $ConfigPath = [System.IO.Path]::Combine($repositoryPath, 'repo_config.json')
+        $ConfigPath = Resolve-RivetPath -RepositoryRoot $repositoryPath -ItemName 'repo_config.json'
     }
     $configFullPath = [System.IO.Path]::GetFullPath($ConfigPath)
     if (-not [System.IO.File]::Exists($configFullPath)) { throw "Repository configuration not found: $configFullPath" }
@@ -49,7 +49,12 @@ function Update-JSHeader {
         $metadataPath = if ([System.IO.Path]::IsPathRooted($metadataSource)) {
             [System.IO.Path]::GetFullPath($metadataSource)
         } else {
-            [System.IO.Path]::GetFullPath([System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($configFullPath), $metadataSource))
+            $resolvedMeta = Resolve-RivetPath -RepositoryRoot $repositoryPath -ItemName $metadataSource
+            if ([System.IO.File]::Exists($resolvedMeta)) {
+                $resolvedMeta
+            } else {
+                [System.IO.Path]::GetFullPath([System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($configFullPath), $metadataSource))
+            }
         }
         $metadata = [System.Text.Json.JsonDocument]::Parse([System.IO.File]::ReadAllText($metadataPath))
         try {

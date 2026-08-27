@@ -23,9 +23,19 @@ BeforeAll {
         'Write-RivetVersionReport.ps1',
         'Write-RivetRepositoryStatus.ps1',
         'Test-RivetRepository.ps1',
+        'Show-RivetFlowGraph.ps1',
+        'Sync-RivetWorkItems.ps1',
         'Invoke-RivetMenu.ps1',
         'Invoke-Rivet.ps1'
     )) { . ([System.IO.Path]::Combine($script:ScriptsRoot, $name)) }
+    . ([System.IO.Path]::Combine($script:ScriptsRoot, 'helpers', 'flowgraph', 'private', 'Engine.ps1'))
+    . ([System.IO.Path]::Combine($script:ScriptsRoot, 'helpers', 'flowgraph', 'public', 'New-FlowNode.ps1'))
+    . ([System.IO.Path]::Combine($script:ScriptsRoot, 'helpers', 'flowgraph', 'public', 'New-FlowEdge.ps1'))
+    . ([System.IO.Path]::Combine($script:ScriptsRoot, 'helpers', 'flowgraph', 'public', 'New-FlowGraph.ps1'))
+    . ([System.IO.Path]::Combine($script:ScriptsRoot, 'helpers', 'flowgraph', 'public', 'Show-FlowGraph.ps1'))
+    . ([System.IO.Path]::Combine($script:ScriptsRoot, 'helpers', 'data_utils', 'Resolve-RivetPath.ps1'))
+    . ([System.IO.Path]::Combine($script:ScriptsRoot, 'helpers', 'cache', 'rivet_cache.ps1'))
+    . ([System.IO.Path]::Combine($script:ScriptsRoot, 'helpers', 'ui', 'Write-RivetReportCard.ps1'))
     . ([System.IO.Path]::Combine($script:ScriptsRoot, 'helpers', 'args-completers', 'argumentcompleters.ps1'))
     . ([System.IO.Path]::Combine($script:ScriptsRoot, 'helpers', 'string', 'clap.ps1'))
     . ([System.IO.Path]::Combine($script:ScriptsRoot, 'helpers', 'ui', 'Format-TuiString.ps1'))
@@ -146,6 +156,44 @@ Describe 'Initialize-RivetRepository' {
         (Get-RivetConfiguration -ConfigPath (Join-Path $repo 'repo_config.json')).project.name | Should -Be 'library'
         $existing = @(Initialize-RivetRepository -RepositoryRoot $repo -TemplateRoot $templateRoot -Confirm:$false)
         @($existing | Where-Object State -eq 'EXISTS').Count | Should -BeGreaterOrEqual 2
+    }
+
+    It 'initializes Bun configuration when -Bun is specified' {
+        $repo = Join-Path $TestDrive 'init-bun-repo'
+        New-TestRepository -Root $repo
+        $templateRoot = Join-Path $script:RivetRoot 'templates/js'
+        $created = @(Initialize-RivetRepository -RepositoryRoot $repo -TemplateRoot $templateRoot -Bun -Confirm:$false)
+        $created.File | Should -Contain 'bunfig.toml'
+        $created.File | Should -Contain 'bun.lock'
+        $created.File | Should -Contain 'package.json'
+        Test-Path (Join-Path $repo 'bunfig.toml') | Should -BeTrue
+        Test-Path (Join-Path $repo 'bun.lock') | Should -BeTrue
+        Test-Path (Join-Path $repo 'package.json') | Should -BeTrue
+    }
+}
+
+Describe 'Test-RivetRepository' {
+    It 'validates repository readiness, Git identity, and manifest consistency' {
+        $repo = Join-Path $TestDrive 'doctor-repo'
+        New-TestRepository -Root $repo -Version '1.0.0'
+        $config = Join-Path $repo 'repo_config.json'
+        New-TestConfig -Path $config
+        [System.IO.File]::WriteAllText((Join-Path $repo 'repo_meta.json'), '{}')
+        $result = Test-RivetRepository -RepositoryRoot $repo -ConfigPath $config
+        $result.Ready | Should -BeTrue
+        @($result.Checks | Where-Object Name -eq 'Git identity').Passed | Should -BeTrue
+        @($result.Checks | Where-Object Name -eq 'Manifest versions').Passed | Should -BeTrue
+    }
+
+    It 'fails when manifest versions drift between package.json and jsr.jsonc' {
+        $repo = Join-Path $TestDrive 'doctor-drift-repo'
+        New-TestRepository -Root $repo -Version '1.0.0'
+        [System.IO.File]::WriteAllText((Join-Path $repo 'jsr.jsonc'), '{"version":"1.1.0"}')
+        $config = Join-Path $repo 'repo_config.json'
+        New-TestConfig -Path $config
+        $result = Test-RivetRepository -RepositoryRoot $repo -ConfigPath $config
+        $result.Ready | Should -BeFalse
+        @($result.Failures.Name) | Should -Contain 'Manifest versions'
     }
 }
 
@@ -437,6 +485,45 @@ Describe 'Invoke-RepositoryTag' {
     }
 }
 
+Describe 'Update-MergeRequestDocumentation' {
+    It 'calculates merge request type in title and updates table template' {
+        $repo = Join-Path $TestDrive 'update-mr-repo'
+        New-TestRepository -Root $repo
+        $config = Join-Path $repo 'repo_config.json'
+        New-TestConfig -Path $config
+
+        [System.IO.File]::AppendAllText((Join-Path $repo 'README.md'), "`nnew feature")
+        Invoke-TestGit $repo add --all | Out-Null
+        Invoke-TestGit $repo commit -m 'feat(core): add shiny feature' | Out-Null
+
+        Update-MergeRequestDocumentation -RepositoryRoot $repo -ConfigPath $config -FromTag v1.0.0 -Version 1.1.0 -Confirm:$false | Out-Null
+
+        $mrContent = [System.IO.File]::ReadAllText((Join-Path $repo 'mr.md'))
+        $mrContent | Should -Match 'Title:\s*\|\s*`Release \(minor\) Fixture 1\.1\.0`'
+        $mrContent | Should -Match 'Source branch:\s*\|\s*`main`'
+        $mrContent | Should -Match 'Target branch:\s*\|\s*`main`'
+        $mrContent | Should -Match '(?:\*\*)?Commit logs parsed(?::?\*\*|\*\*:?|:)?\s*\|\s*`1`'
+        $mrContent | Should -Match 'Add shiny feature\.'
+        $mrContent | Should -Match 'Update npm `package\.json` and JSR `jsr\.jsonc` package versions to `1\.1\.0`\.'
+    }
+
+    It 'calculates patch bump type when only fixes exist' {
+        $repo = Join-Path $TestDrive 'patch-mr-repo'
+        New-TestRepository -Root $repo
+        $config = Join-Path $repo 'repo_config.json'
+        New-TestConfig -Path $config
+
+        [System.IO.File]::AppendAllText((Join-Path $repo 'README.md'), "`nfix bug")
+        Invoke-TestGit $repo add --all | Out-Null
+        Invoke-TestGit $repo commit -m 'fix(core): correct edge case' | Out-Null
+
+        Update-MergeRequestDocumentation -RepositoryRoot $repo -ConfigPath $config -FromTag v1.0.0 -Version 1.0.1 -Confirm:$false | Out-Null
+
+        $mrContent = [System.IO.File]::ReadAllText((Join-Path $repo 'mr.md'))
+        $mrContent | Should -Match 'Title:\s*\|\s*`Release \(patch\) Fixture 1\.0\.1`'
+    }
+}
+
 Describe 'Invoke-GitLabMergeRequest' {
     It 'previews creation from mr.md without sending a write request' {
         $repo = Join-Path $TestDrive 'merge-request-repo'
@@ -476,6 +563,71 @@ Fixture changes.
             $result.SourceBranch | Should -Be 'develop'
             Should -Invoke Invoke-RestMethod -Times 1 -ParameterFilter { $Method -eq 'Get' }
             Should -Invoke Invoke-RestMethod -Times 0 -ParameterFilter { $Method -in @('Post', 'Put') }
+        } finally {
+            [System.Environment]::SetEnvironmentVariable('RIVET_TEST_TOKEN', $null)
+        }
+    }
+
+    It 'creates merge request from table format and writes back IID and link to mr.md' {
+        $repo = Join-Path $TestDrive 'table-mr-create-repo'
+        New-TestRepository -Root $repo
+        $config = Join-Path $repo 'repo_config.json'
+        New-TestConfig -Path $config
+        $templatePath = Join-Path $script:RivetRoot 'templates/mr.md'
+        $mrTemplate = [System.IO.File]::ReadAllText($templatePath)
+        $mr = $mrTemplate -replace '`Merge Request Title`', '`Release (minor) Fixture 1.1.0`' `
+                          -replace '`source-branch`', '`develop`' `
+                          -replace '`target-branch`', '`main`'
+        [System.IO.File]::WriteAllText((Join-Path $repo 'mr.md'), $mr)
+        [System.Environment]::SetEnvironmentVariable('RIVET_TEST_TOKEN', 'test-token')
+        try {
+            Mock Invoke-RestMethod { return @() } -ParameterFilter { $Method -eq 'Get' }
+            Mock Invoke-RestMethod {
+                return [pscustomobject]@{
+                    iid = 42
+                    web_url = 'https://gitlab.example/group/fixture/-/merge_requests/42'
+                }
+            } -ParameterFilter { $Method -eq 'Post' }
+
+            $result = Invoke-GitLabMergeRequest -RepositoryRoot $repo -ConfigPath $config -Mode Create
+            $result.Applied | Should -BeTrue
+            $result.Iid | Should -Be 42
+            $result.Title | Should -Be 'Release (minor) Fixture 1.1.0'
+
+            $updatedMr = [System.IO.File]::ReadAllText((Join-Path $repo 'mr.md'))
+            $updatedMr | Should -Match '(?:\*\*)?Gitlab Merge Request IID(?::?\*\*|\*\*:?|:)?\s*\|\s*`!42`'
+            $updatedMr | Should -Match '(?:\*\*)?Gitlab Merge Link(?::?\*\*|\*\*:?|:)?\s*\|\s*`https://gitlab\.example/group/fixture/-/merge_requests/42`'
+        } finally {
+            [System.Environment]::SetEnvironmentVariable('RIVET_TEST_TOKEN', $null)
+        }
+    }
+
+    It 'updates merge request using existing IID in mr.md' {
+        $repo = Join-Path $TestDrive 'table-mr-update-repo'
+        New-TestRepository -Root $repo
+        $config = Join-Path $repo 'repo_config.json'
+        New-TestConfig -Path $config
+        $templatePath = Join-Path $script:RivetRoot 'templates/mr.md'
+        $mrTemplate = [System.IO.File]::ReadAllText($templatePath)
+        $mr = $mrTemplate -replace '`Merge Request Title`', '`Release (patch) Fixture 1.1.1`' `
+                          -replace '`source-branch`', '`develop`' `
+                          -replace '`target-branch`', '`main`' `
+                          -replace '`id here`', '`!42`'
+        [System.IO.File]::WriteAllText((Join-Path $repo 'mr.md'), $mr)
+        [System.Environment]::SetEnvironmentVariable('RIVET_TEST_TOKEN', 'test-token')
+        try {
+            Mock Invoke-RestMethod {
+                return [pscustomobject]@{
+                    iid = 42
+                    web_url = 'https://gitlab.example/group/fixture/-/merge_requests/42'
+                }
+            } -ParameterFilter { $Method -eq 'Put' }
+
+            $result = Invoke-GitLabMergeRequest -RepositoryRoot $repo -ConfigPath $config -Mode Update
+            $result.Applied | Should -BeTrue
+            $result.Iid | Should -Be 42
+            $result.Title | Should -Be 'Release (patch) Fixture 1.1.1'
+            Should -Invoke Invoke-RestMethod -Times 1 -ParameterFilter { $Method -eq 'Put' -and $Uri -match '/42$' }
         } finally {
             [System.Environment]::SetEnvironmentVariable('RIVET_TEST_TOKEN', $null)
         }
@@ -593,6 +745,146 @@ Describe 'Invoke-Rivet router execution' {
         { Invoke-Rivet -RepositoryRoot $repo -ConfigPath $config -Command 'rebuild-changelog' -DryRun } | Should -Not -Throw
         { Invoke-Rivet -RepositoryRoot $repo -ConfigPath $config -RebuildChangelog -DryRun } | Should -Not -Throw
     }
+
+        It 'routes flow and pipeline commands to Show-RivetFlowGraph' {
+        $repo = Join-Path $TestDrive 'router-flow-repo'
+        New-TestRepository -Root $repo
+        { Invoke-Rivet -RepositoryRoot $repo -FlowGraph } | Should -Not -Throw
+        { Invoke-Rivet -RepositoryRoot $repo -Command 'flow' } | Should -Not -Throw
+        { Invoke-Rivet -RepositoryRoot $repo -Command 'pipeline' } | Should -Not -Throw
+    }
+
+    It 'routes work-items and issues commands' {
+        $repo = Join-Path $TestDrive 'router-workitems-repo'
+        New-TestRepository -Root $repo
+        { Invoke-Rivet -RepositoryRoot $repo -WorkItems -Raw } | Should -Not -Throw
+        { Invoke-Rivet -RepositoryRoot $repo -Command 'work-items' -Raw } | Should -Not -Throw
+        { Invoke-Rivet -RepositoryRoot $repo -Command 'issues' -Raw } | Should -Not -Throw
+    }
+}
+
+Describe 'Resolve-RivetPath' {
+    It 'resolves items in .rivet/ directory when present' {
+        $repo = Join-Path $TestDrive 'resolve-dotrivet-repo'
+        New-TestRepository -Root $repo
+        $dotRivet = Join-Path $repo '.rivet'
+        [System.IO.Directory]::CreateDirectory($dotRivet) | Out-Null
+        $dotConfig = Join-Path $dotRivet 'repo_config.json'
+        [System.IO.File]::WriteAllText($dotConfig, '{}')
+
+        $resolved = Resolve-RivetPath -RepositoryRoot $repo -ItemName 'repo_config.json'
+        $resolved | Should -Be $dotConfig
+    }
+
+    It 'falls back to root file when not present in .rivet/' {
+        $repo = Join-Path $TestDrive 'resolve-root-repo'
+        New-TestRepository -Root $repo
+        $rootConfig = Join-Path $repo 'repo_config.json'
+        [System.IO.File]::WriteAllText($rootConfig, '{}')
+
+        $resolved = Resolve-RivetPath -RepositoryRoot $repo -ItemName 'repo_config.json'
+        $resolved | Should -Be $rootConfig
+    }
+
+    It 'defaults to .rivet/ when .rivet directory exists' {
+        $repo = Join-Path $TestDrive 'resolve-new-repo'
+        New-TestRepository -Root $repo
+        $dotRivet = Join-Path $repo '.rivet'
+        [System.IO.Directory]::CreateDirectory($dotRivet) | Out-Null
+        $resolved = Resolve-RivetPath -RepositoryRoot $repo -ItemName 'mr.md'
+        $resolved | Should -Be (Join-Path $dotRivet 'mr.md')
+    }
+
+    It 'defaults to root when .rivet directory does not exist' {
+        $repo = Join-Path $TestDrive 'resolve-legacy-repo'
+        New-TestRepository -Root $repo
+        $resolved = Resolve-RivetPath -RepositoryRoot $repo -ItemName 'mr.md'
+        $resolved | Should -Be (Join-Path $repo 'mr.md')
+    }
+}
+
+Describe 'Write-RivetReportCard' {
+    It 'generates non-tear gradient panel report card with PassThru' {
+        $rows = @(
+            @{ State = 'OK'; Label = 'VERSION'; Detail = 'Calculated SemVer 1.1.0 using minor bump.' }
+            @{ State = 'SKIP'; Label = 'HEADER'; Detail = 'Disabled by command switch.' }
+        )
+        $lines = Write-RivetReportCard -Title 'TEST REPORT' -Mode 'APPLY' -ProjectName 'Fixture' -Version '1.1.0' -Branch 'main' -Head 'abc1234' -Rows $rows -PassThru
+        $lines.Count | Should -BeGreaterThan 5
+        $plain = $lines -replace "`e\[[0-9;]*[a-zA-Z]", ''
+        ($plain -join "`n") | Should -Match 'TEST REPORT'
+        ($plain -join "`n") | Should -Match 'PROJECT'
+        ($plain -join "`n") | Should -Match 'VERSION'
+        ($plain -join "`n") | Should -Match 'RESULT: SUCCESS'
+    }
+
+    It 'returns structured report data when -Raw is specified' {
+        $rows = @(
+            @{ State = 'OK'; Label = 'VERSION'; Detail = '1.0.0' }
+        )
+        $report = Write-RivetReportCard -Title 'RAW REPORT' -Mode 'DRY RUN' -ProjectName 'Fixture' -Rows $rows -Raw
+        $report | Should -Not -BeNullOrEmpty
+        $report.Title | Should -Be 'RAW REPORT'
+        $report.Mode | Should -Be 'DRY RUN'
+        $report.Success | Should -BeTrue
+    }
+}
+
+Describe 'Sync-RivetWorkItems' {
+    It 'scaffolds a new local work item markdown file in .rivet/work-items/' {
+        $repo = Join-Path $TestDrive 'workitem-scaffold-repo'
+        New-TestRepository -Root $repo
+        $result = Sync-RivetWorkItems -RepositoryRoot $repo -Action 'New' -Title 'Implement report card' -Labels @('feature', 'tui') -Raw
+        $result.Success | Should -BeTrue
+        $workItemsDir = Join-Path $repo '.rivet/work-items'
+        (Test-Path $workItemsDir) | Should -BeTrue
+        $files = @(Get-ChildItem -Path $workItemsDir -Filter '*.md')
+        $files.Count | Should -Be 1
+        $content = Get-Content $files[0].FullName -Raw
+        $content | Should -Match '\|\s*Title:\s*\|\s*`Implement report card`\s*\|'
+        $content | Should -Match '\|\s*\*\*Labels:\*\*\s*\|\s*`feature, tui`\s*\|'
+    }
+
+    It 'lists local work items with metadata' {
+        $repo = Join-Path $TestDrive 'workitem-list-repo'
+        New-TestRepository -Root $repo
+        $workItemsDir = Join-Path $repo '.rivet/work-items'
+        [System.IO.Directory]::CreateDirectory($workItemsDir) | Out-Null
+        $itemPath = Join-Path $workItemsDir '042-fix-parser.md'
+        [System.IO.File]::WriteAllText($itemPath, "---\niid: 42\ntitle: `"Fix parser error`"\nstate: opened\nlabels: [ `"bug`" ]\n---\n\nBody details.")
+
+        $result = Sync-RivetWorkItems -RepositoryRoot $repo -Action 'List' -Raw
+        $result.Success | Should -BeTrue
+        $result.Rows.Count | Should -BeGreaterThan 0
+    }
+}
+
+Describe 'Show-RivetFlowGraph lifecycle rendering' {
+    It 'generates and returns rendered flow graph lines with PassThru' {
+        $lines = Show-RivetFlowGraph -PassThru
+        $lines.Count | Should -BeGreaterThan 5
+        $plain = $lines -replace "`e\[[0-9;]*[a-zA-Z]", ''
+        ($plain -join "`n") | Should -Match 'Git Worktree'
+        ($plain -join "`n") | Should -Match 'SemVer Engine'
+        ($plain -join "`n") | Should -Match 'GitLab Release'
+    }
+}
+
+Describe 'TUI gradient border formatting' {
+    It 'interpolates RGB values between orange and off-black' {
+        $start = @(255, 130, 0)
+        $end = @(40, 44, 54)
+        $mid = Get-InterpolatedRgb -Start $start -End $end -T 0.5
+        $mid[0] | Should -Be 148
+        $mid[1] | Should -Be 87
+        $mid[2] | Should -Be 27
+    }
+
+    It 'applies gradient truecolor sequences to strings' {
+        $grad = Format-GradientString -Text '┌────┐' -Start @(255, 130, 0) -End @(40, 44, 54)
+        $grad | Should -Match "`e\[38;2;255;130;0m┌"
+        $grad | Should -Match "`e\[38;2;40;44;54m┐"
+    }
 }
 
 Describe 'Rivet argument completers' {
@@ -606,6 +898,18 @@ Describe 'Rivet argument completers' {
         $rebuildResults = @($completer.CompleteArgument('Invoke-Rivet', 'Command', 'reb', $null, $null))
         $rebuildResults.Count | Should -BeGreaterThan 0
         $rebuildResults[0].CompletionText | Should -Be 'rebuild-changelog'
+
+        $flowResults = @($completer.CompleteArgument('Invoke-Rivet', 'Command', 'fl', $null, $null))
+        $flowResults.Count | Should -BeGreaterThan 0
+        $flowResults[0].CompletionText | Should -Be 'flow'
+
+        $pipelineResults = @($completer.CompleteArgument('Invoke-Rivet', 'Command', 'pipe', $null, $null))
+        $pipelineResults.Count | Should -BeGreaterThan 0
+        $pipelineResults[0].CompletionText | Should -Be 'pipeline'
+
+        $workResults = @($completer.CompleteArgument('Invoke-Rivet', 'Command', 'work', $null, $null))
+        $workResults.Count | Should -BeGreaterThan 0
+        $workResults[0].CompletionText | Should -Be 'work-items'
     }
 
     It 'completes commit types' {
@@ -631,6 +935,213 @@ Describe 'Rivet argument completers' {
         $rebuildParam = @($completer.CompleteArgument('Invoke-Rivet', 'Param', 'Reb', $null, $null))
         $rebuildParam.CompletionText | Should -Contain 'RebuildChangelog'
         $rebuildParam.CompletionText | Should -Contain 'Rebuild'
+
+        $flowParam = @($completer.CompleteArgument('Invoke-Rivet', 'Param', 'Flow', $null, $null))
+        $flowParam.CompletionText | Should -Contain 'FlowGraph'
+        $flowParam.CompletionText | Should -Contain 'Flow'
+
+        $workParam = @($completer.CompleteArgument('Invoke-Rivet', 'Param', 'Work', $null, $null))
+        $workParam.CompletionText | Should -Contain 'WorkItems'
+
+        $rawParam = @($completer.CompleteArgument('Invoke-Rivet', 'Param', 'Raw', $null, $null))
+        $rawParam.CompletionText | Should -Contain 'Raw'
+
+        $templateParam = @($completer.CompleteArgument('Invoke-Rivet', 'Param', 'Temp', $null, $null))
+        $templateParam.CompletionText | Should -Contain 'Template'
     }
 }
 
+Describe 'Rivet generic cache engine' {
+    BeforeAll {
+        $script:TestCacheDir = Join-Path $TestDrive 'rivet-cache-test'
+        Initialize-RivetCache -CacheDirectory $script:TestCacheDir -DefaultTtlSeconds 60 -ResetMetrics
+    }
+
+    It 'stores and retrieves items from memory and disk' {
+        Set-RivetCache -Key 'test_key_1' -Value @{ Message = 'hello rivet cache' } -TtlSeconds 60 -Tags @('test_tag')
+        $cached = Get-RivetCache -Key 'test_key_1'
+        $cached | Should -Not -BeNullOrEmpty
+        $cached.Message | Should -Be 'hello rivet cache'
+
+        # Verify disk file was created
+        $files = @(Get-ChildItem -Path $script:TestCacheDir -Filter '*.json')
+        $files.Count | Should -BeGreaterThan 0
+    }
+
+    It 'reports cache hit, miss, and performance metrics' {
+        $metricsBefore = Get-RivetCacheMetrics
+        $metricsBefore.Hits | Should -BeGreaterThan 0
+
+        # Cache miss
+        $missVal = Get-RivetCache -Key 'non_existent_key' -DefaultValue 'fallback'
+        $missVal | Should -Be 'fallback'
+
+        $metricsAfter = Get-RivetCacheMetrics
+        $metricsAfter.Misses | Should -BeGreaterThan 0
+        $metricsAfter.TotalRequests | Should -Be ($metricsAfter.Hits + $metricsAfter.Misses)
+        $metricsAfter.HitRatePercentage | Should -BeGreaterThan 0
+        $metricsAfter.TotalSizeBytes | Should -BeGreaterThan 0
+    }
+
+    It 'executes scriptblock once with Invoke-RivetCachedOperation' {
+        $script:cachedCounter = 0
+        $fetchBlock = {
+            $script:cachedCounter++
+            [pscustomobject]@{ Id = 99; Count = $script:cachedCounter }
+        }
+
+        $res1 = Invoke-RivetCachedOperation -Key 'cached_calc' -TtlSeconds 30 -ScriptBlock $fetchBlock
+        $res1.Count | Should -Be 1
+
+        $res2 = Invoke-RivetCachedOperation -Key 'cached_calc' -TtlSeconds 30 -ScriptBlock $fetchBlock
+        $res2.Count | Should -Be 1
+        $script:cachedCounter | Should -Be 1
+
+        # Force refresh
+        $res3 = Invoke-RivetCachedOperation -Key 'cached_calc' -TtlSeconds 30 -ForceRefresh -ScriptBlock $fetchBlock
+        $res3.Count | Should -Be 2
+        $script:cachedCounter | Should -Be 2
+    }
+
+    It 'removes items by key and tag' {
+        Set-RivetCache -Key 'tagged_item_1' -Value 'val1' -Tags @('cleanup_tag')
+        Set-RivetCache -Key 'tagged_item_2' -Value 'val2' -Tags @('cleanup_tag')
+        Test-RivetCacheItem -Key 'tagged_item_1' | Should -Be $true
+
+        Remove-RivetCache -Tag 'cleanup_tag'
+        Test-RivetCacheItem -Key 'tagged_item_1' | Should -Be $false
+        Test-RivetCacheItem -Key 'tagged_item_2' | Should -Be $false
+    }
+}
+
+Describe 'Rivet Work Items table template & targeted sync' {
+    BeforeAll {
+        $script:TestWorkItemRepo = Join-Path $TestDrive 'workitem-table-repo'
+        [System.IO.Directory]::CreateDirectory($script:TestWorkItemRepo) | Out-Null
+        $gitInit = Start-Process git -ArgumentList @('-C', $script:TestWorkItemRepo, 'init') -NoNewWindow -Wait -PassThru
+        $gitInit.ExitCode | Should -Be 0
+    }
+
+    It 'scaffolds work item template matching mr.md metadata table' {
+        $result = Sync-RivetWorkItems `
+            -RepositoryRoot $script:TestWorkItemRepo `
+            -Action 'Template' `
+            -Iid 42 `
+            -Title 'Support dynamic table layout' `
+            -Labels @('feature', 'ui') `
+            -Milestone 'v1.2.0' `
+            -Raw
+
+        $result.Success | Should -Be $true
+        $workFile = Join-Path $script:TestWorkItemRepo '.rivet/work-items/042-support-dynamic-table-layout.md'
+        [System.IO.File]::Exists($workFile) | Should -Be $true
+
+        $content = [System.IO.File]::ReadAllText($workFile)
+        $content | Should -Match '\|\s*\*\*Gitlab Issue IID:\*\*\s*\|\s*`42`\s*\|'
+        $content | Should -Match '\|\s*\*\*Sync Action:\*\*\s*\|\s*`pull`\s*\|'
+        $content | Should -Match '\|\s*\*\*Status:\*\*\s*\|\s*`opened`\s*\|'
+        $content | Should -Match '\|\s*\*\*Milestone:\*\*\s*\|\s*`v1.2.0`\s*\|'
+        $content | Should -Match '\|\s*\*\*Labels:\*\*\s*\|\s*`feature, ui`\s*\|'
+        $content | Should -Match '## \*\*Description\*\*'
+        $content | Should -Match '## \*\*Acceptance Criteria\*\*'
+    }
+
+    It 'lists local work items with status badges and sync tags' {
+        $listReport = Sync-RivetWorkItems `
+            -RepositoryRoot $script:TestWorkItemRepo `
+            -Action 'List' `
+            -Raw
+
+        $listReport.Success | Should -Be $true
+        @($listReport.Rows).Count | Should -BeGreaterThan 1
+        $listReport.Rows[1].Detail | Should -Match '\[OPEN\].*Support dynamic table layout'
+    }
+
+    It 'generates aggregated workitems-list.md dashboard index' {
+        $genReport = Sync-RivetWorkItems `
+            -RepositoryRoot $script:TestWorkItemRepo `
+            -Action 'GenerateList' `
+            -Raw
+
+        $genReport.Success | Should -Be $true
+        $dashPath = Join-Path $script:TestWorkItemRepo '.rivet/workitems-list.md'
+        (Test-Path $dashPath) | Should -Be $true
+
+        $dashContent = Get-Content $dashPath -Raw
+        $dashContent | Should -Match '<!--rivet: generated Tasklist-->'
+        $dashContent | Should -Match '### 🎯 \*\*Support dynamic table layout\*\*'
+        $dashContent | Should -Match '🟢 open'
+        $dashContent | Should -Match '\[#42\]'
+    }
+
+    It 'closes a work item and flags for push sync' {
+        $closeReport = Sync-RivetWorkItems `
+            -RepositoryRoot $script:TestWorkItemRepo `
+            -Action 'Close' `
+            -Iid 42 `
+            -Raw
+
+        $closeReport.Success | Should -Be $true
+        $itemFile = Join-Path $script:TestWorkItemRepo '.rivet/work-items/042-support-dynamic-table-layout.md'
+        $content = Get-Content $itemFile -Raw
+        $content | Should -Match '\|\s*\*\*Status:\*\*\s*\|\s*`closed`\s*\|'
+        $content | Should -Match '\|\s*\*\*Sync Action:\*\*\s*\|\s*`push`\s*\|'
+
+        # Check dashboard also reflected closed status
+        $dashPath = Join-Path $script:TestWorkItemRepo '.rivet/workitems-list.md'
+        $dashContent = Get-Content $dashPath -Raw
+        $dashContent | Should -Match '✅ closed'
+    }
+
+    It 'reopens a work item and views details' {
+        $reopenReport = Sync-RivetWorkItems `
+            -RepositoryRoot $script:TestWorkItemRepo `
+            -Action 'Reopen' `
+            -Iid 42 `
+            -Raw
+
+        $reopenReport.Success | Should -Be $true
+        $itemFile = Join-Path $script:TestWorkItemRepo '.rivet/work-items/042-support-dynamic-table-layout.md'
+        $content = Get-Content $itemFile -Raw
+        $content | Should -Match '\|\s*\*\*Status:\*\*\s*\|\s*`opened`\s*\|'
+
+        $viewReport = Sync-RivetWorkItems `
+            -RepositoryRoot $script:TestWorkItemRepo `
+            -Action 'View' `
+            -Iid 42 `
+            -Raw
+
+        $viewReport.Success | Should -Be $true
+        $viewReport.Rows[0].Detail | Should -Match 'Support dynamic table layout'
+    }
+}
+
+Describe 'SMenu description display modes' {
+    It 'calculates Card layout on wide terminal' {
+        $layout = Get-SMenuLayout -TerminalWidth 120 -TerminalHeight 30 -ItemCount 10 -DescriptionDisplay 'Card'
+        $layout.Wide | Should -Be $true
+        $layout.DescriptionDisplay | Should -Be 'Card'
+        $layout.CardWidth | Should -BeGreaterThan 20
+        $layout.LabelWidth | Should -BeGreaterThan 20
+    }
+
+    It 'calculates Inline layout on wide terminal' {
+        $layout = Get-SMenuLayout -TerminalWidth 120 -TerminalHeight 30 -ItemCount 10 -DescriptionDisplay 'Inline'
+        $layout.Wide | Should -Be $true
+        $layout.DescriptionDisplay | Should -Be 'Inline'
+        $layout.DescriptionWidth | Should -BeGreaterThan 20
+    }
+
+    It 'calculates Minimal layout' {
+        $layout = Get-SMenuLayout -TerminalWidth 120 -TerminalHeight 30 -ItemCount 10 -DescriptionDisplay 'Minimal'
+        $layout.DescriptionDisplay | Should -Be 'Minimal'
+        $layout.LabelWidth | Should -BeGreaterThan 80
+    }
+
+    It 'calculates Pager layout on wide terminal' {
+        $layout = Get-SMenuLayout -TerminalWidth 120 -TerminalHeight 30 -ItemCount 10 -DescriptionDisplay 'Pager'
+        $layout.Wide | Should -Be $true
+        $layout.DescriptionDisplay | Should -Be 'Pager'
+        $layout.CardWidth | Should -BeGreaterThan 20
+    }
+}
