@@ -93,6 +93,13 @@ function Get-SMenuLayout {
     }
 }
 
+if (-not (Get-Variable -Name 'SMenuState' -Scope Script -ErrorAction SilentlyContinue)) {
+    $script:SMenuState = @{
+        LastIndex   = [System.Collections.Generic.Dictionary[string, int]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        DisplayMode = 'Card'
+    }
+}
+
 function Show-SMenu {
     [CmdletBinding()]
     param(
@@ -106,7 +113,26 @@ function Show-SMenu {
     if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) {
         throw 'Show-SMenu requires an interactive terminal.'
     }
-    if ($DefaultIndex -ge $Items.Count) { $DefaultIndex = 0 }
+
+    # Resolve last memory index:
+    # If explicit DefaultIndex was given, honor it; otherwise restore remembered index for this menu Title.
+    $resolvedIndex = 0
+    if ($PSBoundParameters.ContainsKey('DefaultIndex') -and $DefaultIndex -gt 0) {
+        $resolvedIndex = $DefaultIndex
+    } elseif ($script:SMenuState.LastIndex.ContainsKey($Title)) {
+        $resolvedIndex = $script:SMenuState.LastIndex[$Title]
+    }
+    if ($resolvedIndex -ge $Items.Count) { $resolvedIndex = [Math]::Max(0, $Items.Count - 1) }
+    $currentIndex = $resolvedIndex
+
+    # Resolve active display mode:
+    $currentDisplayMode = if ($PSBoundParameters.ContainsKey('DescriptionDisplay')) {
+        $DescriptionDisplay
+    } elseif ($script:SMenuState.DisplayMode) {
+        $script:SMenuState.DisplayMode
+    } else {
+        'Card'
+    }
 
     $esc = [char]27
     $colors = [ordered]@{
@@ -124,8 +150,6 @@ function Show-SMenu {
         Tag        = "$esc[38;2;0;200;255m"
     }
 
-    $currentIndex = $DefaultIndex
-    $currentDisplayMode = $DescriptionDisplay
     $pagerOffset = 0
     $topIndex = 0
     $lastWidth = -1
@@ -355,6 +379,8 @@ function Show-SMenu {
 
             # 7. SELECT / ENTER (Enter, Arrow Right, Vim l/L)
             if ($key.Key -in @('Enter', 'RightArrow') -or $kChar -in @('l', 'L')) {
+                $script:SMenuState.LastIndex[$Title] = $currentIndex
+                $script:SMenuState.DisplayMode = $currentDisplayMode
                 return $Items[$currentIndex].Value
             }
 
@@ -367,6 +393,7 @@ function Show-SMenu {
                     $modeIdx = ($modeIdx + 1) % $displayModes.Count
                 }
                 $currentDisplayMode = $displayModes[$modeIdx]
+                $script:SMenuState.DisplayMode = $currentDisplayMode
                 $pagerOffset = 0
                 $needsRedraw = $true
                 continue
@@ -418,6 +445,8 @@ function Show-SMenu {
                         continue
                     }
                 }
+                $script:SMenuState.LastIndex[$Title] = $currentIndex
+                $script:SMenuState.DisplayMode = $currentDisplayMode
                 return $null
             }
         }
