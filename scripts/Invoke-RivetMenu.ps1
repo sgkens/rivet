@@ -289,22 +289,22 @@ function Invoke-RivetMenu {
     }
 
     $mainItems = @(
-        (New-MenuItem 'Initialize repository' 'init' 'create or validate root configuration' -MultiAction)
-        (New-MenuItem 'Prep Release' 'prep_release' 'manifests, release docs, READMEs, and mr.md' -MultiAction)
-        (New-MenuItem 'Local metadata' 'local' 'version, README header, and TOC' -MultiAction)
-        (New-MenuItem 'Release documents' 'release' 'draft or finalize changelog and notes')
-        (New-MenuItem 'Merge request' 'merge_request' 'generate the managed mr.md document' -MultiAction)
-        (New-MenuItem 'GitLab metadata' 'gitlab' 'description, topics, and labels')
-        (New-MenuItem 'Conventional Commit' 'commit' 'review and submit repository changes' -MultiAction)
-        (New-MenuItem 'Work items & tasks' 'work_items' 'list, view, scaffold, pull, push, and index tasks' -MultiAction)
-        (New-MenuItem 'Tag and publish' 'tag' 'snapshot checkpoint or production release')
-        (New-MenuItem 'Git history' 'history' 'detailed enriched one-line log')
-        (New-MenuItem 'Repository status' 'status' 'version, upstream, worktree, and next tags')
-        (New-MenuItem 'Version report' 'version_report' 'explain baseline and bump inputs')
-        (New-MenuItem 'Doctor' 'doctor' 'validate dependencies and configuration')
-        (New-MenuItem 'Pipeline flow graph' 'flow' 'visualize the Rivet automation and release lifecycle')
-        (New-MenuItem 'Help' 'help' 'manual and parameter knowledge')
-        (New-MenuItem 'Exit' 'exit')
+        (New-MenuItem 'Initialize repository' 'init' 'Scaffolds repository configuration (repo_config.json, repo_meta.json, toolchain configs). Supports standard npm/Node or Bun-native templates with optional remote GitLab metadata synchronization.' -MultiAction)
+        (New-MenuItem 'Prep Release' 'prep_release' 'Orchestrates full release preparation: calculates next SemVer from Conventional Commits, updates package manifests (package.json & jsr.jsonc), generates CHANGELOG.md, release-notes.md, README badges, and mr.md.' -MultiAction)
+        (New-MenuItem 'Local metadata' 'local' 'Updates repository-local metadata files without modifying Git history. Manages SemVer manifest versions, centered README badges & titles, and collapsible table-of-contents.' -MultiAction)
+        (New-MenuItem 'Release documents' 'release' 'Generates and manages release notes. Creates draft notes under [Unreleased], finalizes dated release sections (## [x.y.z]), or rebuilds full changelog across all historical Git tags.')
+        (New-MenuItem 'Merge request' 'merge_request' 'Generates the managed mr.md document from commit history and offers direct publication or updates to GitLab Merge Requests via REST API.' -MultiAction)
+        (New-MenuItem 'GitLab metadata' 'gitlab' 'Synchronizes project descriptions, topics, and managed label taxonomy from repo_meta.json directly to the GitLab project via REST API.')
+        (New-MenuItem 'Conventional Commit' 'commit' 'Interactive commit assistant. Guides through type, scope, breaking changes, and description according to Conventional Commits standards with full patch diff review.' -MultiAction)
+        (New-MenuItem 'Work items & tasks' 'work_items' 'Bidirectional GitLab issue tracker and local task management. Supports markdown work items (.rivet/work-items/*.md), table metadata, criteria checklists, and pull/push synchronization.' -MultiAction)
+        (New-MenuItem 'Tag and publish' 'tag' 'Creates and pushes SemVer Git tags to remote. Supports snapshot tags for CI validation or production release tags (vX.Y.Z-release) that trigger automated package publication.')
+        (New-MenuItem 'Git history' 'history' 'Renders an enriched terminal git log graph displaying commit hashes, author attribution, relative timestamps, file change statistics, and GPG signature status.')
+        (New-MenuItem 'Repository status' 'status' 'Displays complete repository status: branch, HEAD commit, upstream tracking, dirty worktree status, current SemVer baseline, and next release tag projection.')
+        (New-MenuItem 'Version report' 'version_report' 'Explains Conventional Commit version resolution: scans commit log from baseline tag, breaks down breaking/feature/fix changes, and projects next SemVer.')
+        (New-MenuItem 'Doctor' 'doctor' 'Performs comprehensive health diagnostics across PowerShell, Git, Node/Bun runtimes, configuration schemas, manifest version parity, required files, and API tokens.')
+        (New-MenuItem 'Pipeline flow graph' 'flow' 'Renders an interactive ASCII ANSI diagram illustrating Rivet complete automation lifecycle from worktree discovery to GitLab release publication.')
+        (New-MenuItem 'Help' 'help' 'Opens interactive documentation and command manual covering all CLI switches, configuration properties, submodules, and workflow patterns.')
+        (New-MenuItem 'Exit' 'exit' 'Closes the Rivet interactive command center and returns to shell prompt.')
     )
 
     Enable-TerminalAltBuffer
@@ -317,10 +317,10 @@ function Invoke-RivetMenu {
         switch ($action) {
             'init' {
                 $kind = Select-MenuValue -Title 'INITIALIZE REPOSITORY' -Items @(
-                    (New-MenuItem 'Local configuration' 'local' 'create or validate root configuration only')
-                    (New-MenuItem 'Local configuration (Bun)' 'local_bun' 'create configuration including bunfig.toml and bun.lock')
-                    (New-MenuItem 'Configuration and GitLab' 'gitlab' 'initialize then synchronize project metadata' -MultiAction)
-                    (New-MenuItem 'Configuration and GitLab (Bun)' 'gitlab_bun' 'initialize Bun repository then sync project metadata' -MultiAction)
+                    (New-MenuItem 'Local configuration' 'local' 'Creates repo_config.json, repo_meta.json, vite config, and standard lint/test toolchain configuration files locally without connecting to remote APIs.')
+                    (New-MenuItem 'Local configuration (Bun)' 'local_bun' 'Creates local repository files plus Bun-native configuration files (bunfig.toml and bun.lock) configured for Bun package manifests.')
+                    (New-MenuItem 'Configuration and GitLab' 'gitlab' 'Scaffolds all local repository files and immediately synchronizes project descriptions, repository topics, and issue labels to GitLab.' -MultiAction)
+                    (New-MenuItem 'Configuration and GitLab (Bun)' 'gitlab_bun' 'Full Bun-native repository setup combined with automatic remote GitLab project metadata and label catalog synchronization.' -MultiAction)
                 )
                 if ($null -eq $kind) { continue }
                 $isBun = $kind -in @('local_bun', 'gitlab_bun')
@@ -337,9 +337,9 @@ function Invoke-RivetMenu {
             }
             'prep_release' {
                 $kind = Select-MenuValue -Title 'PREP RELEASE' -Items @(
-                    (New-MenuItem 'Preview release preparation' 'preview' 'inspect every generated release file' -MultiAction)
-                    (New-MenuItem 'Apply release preparation' 'apply' 'update manifests, docs, READMEs, and mr.md' -MultiAction)
-                    (New-MenuItem 'Apply and commit' 'commit' 'update then review the release-file commit' -MultiAction)
+                    (New-MenuItem 'Preview release preparation' 'preview' 'Performs a non-destructive dry-run. Simulates SemVer bump, previews package.json/jsr.jsonc updates, CHANGELOG.md, release notes, README header, and mr.md without disk writes.' -MultiAction)
+                    (New-MenuItem 'Apply release preparation' 'apply' 'Applies full release preparation: calculates next version from Conventional Commits, updates manifest files, appends dated release notes to CHANGELOG.md, and rebuilds mr.md.' -MultiAction)
+                    (New-MenuItem 'Apply and commit' 'commit' 'Applies full release preparation and immediately stages and commits an automated chore(release): prepare release metadata commit.' -MultiAction)
                 )
                 if ($null -eq $kind) { continue }
                 $p = [ordered]@{ PrepRelease = $true }
@@ -351,12 +351,12 @@ function Invoke-RivetMenu {
             }
             'local' {
                 $choice = Select-MenuValue -Title 'LOCAL METADATA' -Items @(
-                    (New-MenuItem 'Preview all' 'preview_all' 'version, header, and TOC without writes' -MultiAction)
-                    (New-MenuItem 'Apply all' 'apply_all' 'version, header, and TOC' -MultiAction)
-                    (New-MenuItem 'Version only' 'version' 'package.json and jsr.jsonc manifests')
-                    (New-MenuItem 'README header only' 'header' 'configured project identity and badges')
-                    (New-MenuItem 'README TOC only' 'toc' 'managed table of contents')
-                    (New-MenuItem 'Validate README' 'validate_readme' 'required JavaScript library sections')
+                    (New-MenuItem 'Preview all' 'preview_all' 'Simulates version calculation, centered README header generation, and table-of-contents insertion without making disk modifications.' -MultiAction)
+                    (New-MenuItem 'Apply all' 'apply_all' 'Synchronizes calculated SemVer in package.json & jsr.jsonc, updates centered README badge header, and inserts dynamic TOC into README.md.' -MultiAction)
+                    (New-MenuItem 'Version only' 'version' 'Calculates and writes SemVer bump strictly to package.json and jsr.jsonc without touching README headers or TOC.')
+                    (New-MenuItem 'README header only' 'header' 'Regenerates the centered README banner, package title, description, and status/coverage badge table from repo_config.json.')
+                    (New-MenuItem 'README TOC only' 'toc' 'Scans README.md heading hierarchy (H2-H4) and updates the collapsible table-of-contents marker block in-place.')
+                    (New-MenuItem 'Validate README' 'validate_readme' 'Audits README.md against mandatory required section headings defined in repository configuration rules.')
                 )
                 if ($null -eq $choice) { continue }
                 $p = [ordered]@{}
@@ -371,9 +371,9 @@ function Invoke-RivetMenu {
             }
             'release' {
                 $kind = Select-MenuValue -Title 'RELEASE DOCUMENTS' -Items @(
-                    (New-MenuItem 'Generate draft' 'draft' 'update changelog and release notes')
-                    (New-MenuItem 'Finalize release' 'finalize' 'write the dated release sections')
-                    (New-MenuItem 'Rebuild changelog' 'rebuild' 'regenerate entire CHANGELOG.md across all tags' -MultiAction)
+                    (New-MenuItem 'Generate draft' 'draft' 'Extracts Conventional Commits since the baseline Git tag and updates the ## [Unreleased] section in CHANGELOG.md and release-notes.md.')
+                    (New-MenuItem 'Finalize release' 'finalize' 'Promotes the unreleased draft into a permanent, dated release section (## [x.y.z]) with author attribution and commit links.')
+                    (New-MenuItem 'Rebuild changelog' 'rebuild' 'Scans all reachable historical Git tags in reverse chronological order and completely regenerates the full CHANGELOG.md and curated docs/data/changelog.json.' -MultiAction)
                 )
                 if ($null -eq $kind) { continue }
                 $p = [ordered]@{}
@@ -404,9 +404,9 @@ function Invoke-RivetMenu {
             }
             'merge_request' {
                 $kind = Select-MenuValue -Title 'MERGE REQUEST' -Items @(
-                    (New-MenuItem 'Generate mr.md' 'document' 'update the local merge-request document')
-                    (New-MenuItem 'Generate and create on GitLab' 'create' 'publish a new merge request after generation' -MultiAction)
-                    (New-MenuItem 'Generate and update on GitLab' 'update' 'replace the matching open merge request' -MultiAction)
+                    (New-MenuItem 'Generate mr.md' 'document' 'Extracts conventional changes and metadata into the local mr.md document for review before GitLab submission.')
+                    (New-MenuItem 'Generate and create on GitLab' 'create' 'Builds mr.md from commit history and immediately publishes a new GitLab Merge Request via REST API to the target branch.' -MultiAction)
+                    (New-MenuItem 'Generate and update on GitLab' 'update' 'Builds mr.md and updates the existing open Merge Request for the current branch on GitLab with latest description and tasks.' -MultiAction)
                 )
                 if ($null -eq $kind) { continue }
                 $p = [ordered]@{}
@@ -432,9 +432,9 @@ function Invoke-RivetMenu {
             }
             'commit' {
                 $kind = Select-MenuValue -Title 'COMMIT WORKFLOW' -Items @(
-                    (New-MenuItem 'Commit current changes' 'current' 'skip metadata generation')
-                    (New-MenuItem 'Metadata and commit' 'metadata' 'run local metadata before committing' -MultiAction)
-                    (New-MenuItem 'Preview commit' 'preview' 'do not stage repository changes')
+                    (New-MenuItem 'Commit current changes' 'current' 'Interactive Conventional Commit tool. Reviews git diff, prompts for commit type, scope, breaking changes, and subject description, then commits staged files.')
+                    (New-MenuItem 'Metadata and commit' 'metadata' 'Runs automated local metadata sync (version, header, TOC) first, then enters interactive Conventional Commit review.' -MultiAction)
+                    (New-MenuItem 'Preview commit' 'preview' 'Dry-run mode. Previews the commit message, type, scope, and staged file list without executing git commit.')
                 )
                 if ($null -eq $kind) { continue }
                 $p = [ordered]@{ Commit = $true }
@@ -444,8 +444,8 @@ function Invoke-RivetMenu {
             }
             'tag' {
                 $kind = Select-MenuValue -Title 'TAG AND PUBLISH' -Items @(
-                    (New-MenuItem 'Snapshot tag' 'snapshot' 'push plain SemVer for validation only')
-                    (New-MenuItem 'Production tag' 'production' 'append -release and trigger publishing')
+                    (New-MenuItem 'Snapshot tag' 'snapshot' 'Validates clean worktree and pushes a plain SemVer tag (e.g. v1.2.0) to origin for CI test and lint validation without triggering publication.')
+                    (New-MenuItem 'Production tag' 'production' 'Validates clean worktree, verifies manifest versions match, and creates a production release tag (v1.2.0-release) to trigger automated package publication.')
                 )
                 if ($null -eq $kind) { continue }
                 $p = [ordered]@{ Tag = $true }
@@ -481,14 +481,14 @@ function Invoke-RivetMenu {
             'flow' { Invoke-ReviewedWorkflow -Title 'Pipeline flow graph' -Parameters ([ordered]@{ FlowGraph = $true }) }
             'work_items' {
                 $taskAction = Select-MenuValue -Title 'WORK ITEMS & TASK MANAGEMENT' -Items @(
-                    (New-MenuItem 'List tasks' 'list' 'render overview table of local work items')
-                    (New-MenuItem 'View task details' 'view' 'inspect full description and criteria for an issue')
-                    (New-MenuItem 'Scaffold new work item' 'new' 'create markdown template with metadata table')
-                    (New-MenuItem 'Close task' 'close' 'mark closed and flag for push synchronization')
-                    (New-MenuItem 'Reopen task' 'reopen' 'mark open and flag for push synchronization')
-                    (New-MenuItem 'Pull from GitLab' 'pull' 'fetch remote issues and discussion notes into local markdown')
-                    (New-MenuItem 'Push to GitLab' 'push' 'publish local changes to GitLab issue tracker' -MultiAction)
-                    (New-MenuItem 'Regenerate tasklist' 'generate_list' 'rebuild the aggregated workitems-list.md dashboard')
+                    (New-MenuItem 'List tasks' 'list' 'Renders a styled ASCII table displaying all local work items (.rivet/work-items/*.md), showing issue IIDs, titles, milestones, labels, and sync states.')
+                    (New-MenuItem 'View task details' 'view' 'Opens full details of a specific local work item, including metadata table, description, acceptance criteria, and discussion notes.')
+                    (New-MenuItem 'Scaffold new work item' 'new' 'Scaffolds a new local work item markdown file formatted with standard table metadata and criteria checklist.')
+                    (New-MenuItem 'Close task' 'close' 'Marks a local work item as closed, sets its sync state to push, and updates the aggregated work items list dashboard.')
+                    (New-MenuItem 'Reopen task' 'reopen' 'Reopens a previously closed local work item, sets sync state to push, and updates the aggregated dashboard.')
+                    (New-MenuItem 'Pull from GitLab' 'pull' 'Fetches remote issues and discussion notes from GitLab REST API into local markdown work item files.')
+                    (New-MenuItem 'Push to GitLab' 'push' 'Publishes locally modified work items (marked with Sync Action: push) to GitLab issue tracker.' -MultiAction)
+                    (New-MenuItem 'Regenerate tasklist' 'generate_list' 'Rebuilds the master .rivet/workitems-list.md dashboard aggregating all active, completed, and pending work items.')
                 )
                 if ($null -eq $taskAction) { continue }
                 $p = [ordered]@{}
