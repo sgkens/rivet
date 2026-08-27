@@ -130,6 +130,7 @@ function Invoke-RivetMenu {
         [Console]::Clear()
         $workflowTimer = [System.Diagnostics.Stopwatch]::StartNew()
         $workflowState = 'COMPLETE'
+        $isHelpWorkflow = $Parameters.Contains('Help') -and [bool]$Parameters.Help
         $workflowOutput = @()
         $prevColor = $env:FORCE_COLOR
         try {
