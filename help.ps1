@@ -24,13 +24,14 @@ $scriptsRoot = [System.IO.Path]::Combine($PSScriptRoot, 'scripts')
 . ([System.IO.Path]::Combine($scriptsRoot, 'asciitokenizer.ps1'))
 
 $asciiBanner = @'
- ____  ___ _   _ _____ _____
-|  _ \|_ _| | | | ____|_   _|
-| |_) || || | | |  _|   | |
-|  _ < | || |_| | |___  | |
-|_| \_\___| \___/|_____| |_|
-      Repository automation reference
-      ./help.ps1 -Param <name>
+   ┌───┐    █████  ████ ██   ██ ██████ ██████
+  ╱▓▓▓▓▓╲   ██  ██  ██  ██   ██ ██      ██
+ │▓█▓▓▓█▓│--█████   ██   ██ ██  █████    ██
+  ╲▓▓▓▓▓╱   ██ ██   ██   ██ ██  ██        ██
+   └─┼─┘    ██  ██ ████   ███   ██████   ██
+     |      |    |  ||     ||    |  |    ||
+     |      Repository automation reference
+     |      ./help.ps1 -Param <name>
 '@
 
 function New-HelpEntry {

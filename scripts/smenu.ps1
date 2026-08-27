@@ -189,7 +189,7 @@ function Show-SMenu {
         $modeTag = "[$currentDisplayMode]"
         $position = "$($currentIndex + 1)/$($Items.Count) $modeTag"
         $hintBudget = [Math]::Max(1, $inner - $position.Length - 1)
-        $hint = Pad-AnsiString -Text "$($colors.Muted) ↑/↓/j/k navigate  pgup/pgdn/u/d page  enter/l select  tab mode  esc/q back$($colors.Reset)" -Width $hintBudget -Align Left -Truncate
+        $hint = Pad-AnsiString -Text "$($colors.Muted) ↑/↓/k/j nav  ←/h/esc/q back  →/l/enter select  pgup/pgdn page  tab mode$($colors.Reset)" -Width $hintBudget -Align Left -Truncate
         [void]$builder.AppendLine("$leftVert$hint $($colors.Faint)$position$($colors.Reset)$rightVert")
         [void]$builder.AppendLine($midBorder)
 

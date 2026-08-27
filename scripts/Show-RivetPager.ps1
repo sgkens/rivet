@@ -67,8 +67,8 @@ function Show-RivetPager {
                 [void]$frame.Append($rightVert).AppendLine()
             }
 
-            $footer = ' ↑/↓/j/k scroll  pgup/pgdn/u/d page  g/G top/end  esc/q close '
-            if ($footer.Length -gt $innerWidth) { $footer = ' arrows/vim scroll  esc/q close ' }
+            $footer = ' ↑/↓/j/k scroll  ←/→/h/l/esc/q close  pgup/pgdn/u/d page  g/G top/end '
+            if ($footer.Length -gt $innerWidth) { $footer = ' arrows/vim scroll  ←/→/esc/q close ' }
             $footerRule = [Math]::Max(0, $innerWidth - $footer.Length)
             $rawBottom = "└$footer$('─' * $footerRule)┘"
             [void]$frame.Append((Format-GradientString -Text $rawBottom -Start $orange -End $offBlack))

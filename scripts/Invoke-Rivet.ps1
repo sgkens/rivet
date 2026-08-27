@@ -291,13 +291,14 @@ function Invoke-Rivet {
     }
 
     $asciiBanner = @'
- ____  ___ _   _ _____ _____
-|  _ \|_ _| | | | ____|_   _|
-| |_) || || | | |  _|   | |
-|  _ < | || |_| | |___  | |
-|_| \_\___| \___/|_____| |_|
-      StaticCanvas repository command center
-      Local by default; remote sync is opt-in
+   ┌───┐    █████  ████ ██   ██ ██████ ██████
+  ╱▓▓▓▓▓╲   ██  ██  ██  ██   ██ ██      ██
+ │▓█▓▓▓█▓│--█████   ██   ██ ██  █████    ██
+  ╲▓▓▓▓▓╱   ██ ██   ██   ██ ██  ██        ██
+   └─┼─┘    ██  ██ ████   ███   ██████   ██
+     |      |    |  ||     ||    |  |    ||
+     |      StaticCanvas repository command center
+     |      Local by default; remote sync is opt-in
 '@
 
     $reportRows = [System.Collections.Generic.List[object]]::new(7)
