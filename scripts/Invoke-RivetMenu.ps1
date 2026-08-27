@@ -130,36 +130,44 @@ function Invoke-RivetMenu {
         [Console]::Clear()
         $workflowTimer = [System.Diagnostics.Stopwatch]::StartNew()
         $workflowState = 'COMPLETE'
-        $isHelpWorkflow = $Parameters.Contains('Help') -and [bool]$Parameters.Help
         $workflowOutput = @()
+        $prevColor = $env:FORCE_COLOR
         try {
             # Keep workflow module imports outside the active TUI process.
             # Re-importing Rivet while this function runs invalidates its local
             # menu functions when control returns from the workflow.
-            if ($isHelpWorkflow) {
-                $prevColor = $env:FORCE_COLOR
-                try {
-                    $env:FORCE_COLOR = '1'
-                    $workflowOutput = @(& pwsh -NoLogo -NoProfile -File $resolvedRunner -RepositoryRoot $repositoryRoot @Parameters 2>&1)
-                } finally {
-                    $env:FORCE_COLOR = $prevColor
-                }
-            } else {
-                & pwsh -NoLogo -NoProfile -File $resolvedRunner -RepositoryRoot $repositoryRoot @Parameters
-            }
+            $env:FORCE_COLOR = '1'
+            $workflowOutput = @(& pwsh -NoLogo -NoProfile -File $resolvedRunner -RepositoryRoot $repositoryRoot @Parameters 2>&1 | ForEach-Object { [string]$_ })
             if ($LASTEXITCODE -ne 0) {
                 throw "Rivet workflow exited with code $LASTEXITCODE."
             }
         } catch {
             $workflowState = 'FAILED'
-            [Console]::WriteLine((Format-AnsiText -Text "FAILED  $($_.Exception.Message)" -Color @(255, 90, 105) -Bold))
+            $workflowOutput += (Format-AnsiText -Text "FAILED  $($_.Exception.Message)" -Color @(255, 90, 105) -Bold)
         } finally {
+            $env:FORCE_COLOR = $prevColor
             $workflowTimer.Stop()
         }
+
         if ($isHelpWorkflow -and $workflowState -eq 'COMPLETE') {
             Show-RivetPager -Title 'RIVET HELP' -Lines ([string[]]$workflowOutput)
             return
         }
+
+        # Check if output exceeds terminal viewport height
+        $windowHeight = try { [Console]::WindowHeight } catch { 24 }
+        $threshold = [Math]::Max(8, $windowHeight - 6)
+        if ($workflowOutput.Count -gt $threshold) {
+            Show-RivetPager -Title $Title.ToUpper() -Lines ([string[]]$workflowOutput)
+            return
+        }
+
+        # Output fits cleanly in current viewport
+        [Console]::Clear()
+        foreach ($line in $workflowOutput) {
+            [Console]::WriteLine($line)
+        }
+
         [Console]::WriteLine('')
         $elapsed = Get-ElapsedTime -TimeSpan $workflowTimer.Elapsed
         $resultColor = if ($workflowState -eq 'COMPLETE') { @(80, 220, 150) } else { @(255, 90, 105) }
