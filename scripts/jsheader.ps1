@@ -3,7 +3,8 @@ function Update-JSHeader {
     .SYNOPSIS
         Builds the configured README project header from repository metadata.
     .DESCRIPTION
-        Replaces the leading aligned div block in README.md. Project
+        Replaces the generated headers in README.md and README-npm.md when the
+        npm README exists. Project
         identity, package paths, badge presentation, URLs, and colors come from
         repo_config.json. The description comes from repo_meta.json and is also
         consumed by GitLab metadata synchronization.
@@ -13,6 +14,8 @@ function Update-JSHeader {
         Path to repo_config.json. Defaults to the repository-local file.
     .PARAMETER TemplatePath
         Optional path to the reusable README header template.
+    .PARAMETER NpmTemplatePath
+        Optional path to the reusable npm README header template.
     .PARAMETER DryRun
         Reports whether the header would change without writing README.md.
     .EXAMPLE
@@ -25,6 +28,7 @@ function Update-JSHeader {
         [string]$RepositoryRoot = (Get-Location).Path,
         [string]$ConfigPath,
         [string]$TemplatePath,
+        [string]$NpmTemplatePath,
         [switch]$DryRun
     )
 
@@ -45,6 +49,7 @@ function Update-JSHeader {
         $project = $root.GetProperty('project')
         $header = $root.GetProperty('readmeHeader')
         $gitlab = $root.GetProperty('gitlab')
+        $tagging = $root.GetProperty('tagging')
         $metadataSource = $root.GetProperty('metadataSource').GetString()
         $metadataPath = if ([System.IO.Path]::IsPathRooted($metadataSource)) {
             [System.IO.Path]::GetFullPath($metadataSource)
@@ -63,6 +68,7 @@ function Update-JSHeader {
             $metadata.Dispose()
         }
 
+        $projectName = $project.GetProperty('name').GetString()
         $name = $project.GetProperty('displayName').GetString()
         $projectPath = $project.GetProperty('path').GetString()
         $artifactPath = $project.GetProperty('artifactPath').GetString()
@@ -80,6 +86,8 @@ function Update-JSHeader {
         $labelColor = $header.GetProperty('labelColor').GetString().TrimStart('#').ToLowerInvariant()
         $logoColor = $header.GetProperty('logoColor').GetString().TrimStart('#').ToLowerInvariant()
         $codecovToken = $header.GetProperty('codecovToken').GetString()
+        $tagPrefix = $tagging.GetProperty('prefix').GetString()
+        $releaseSuffix = $tagging.GetProperty('releaseSuffix').GetString()
     } finally {
         $config.Dispose()
     }
@@ -92,6 +100,17 @@ function Update-JSHeader {
     if ($LASTEXITCODE -ne 0) { throw "Unable to read Git tags from '$repositoryPath'." }
     $latestTag = $tagLines | Where-Object { $_ -match '^v\d+\.\d+\.\d+(?:-release)?$' } | Select-Object -First 1
     if ([string]::IsNullOrWhiteSpace($latestTag)) { throw 'No stable SemVer tag is reachable from HEAD.' }
+
+    $packagePath = [System.IO.Path]::Combine($repositoryPath, 'package.json')
+    if (-not [System.IO.File]::Exists($packagePath)) { throw "Package manifest not found: $packagePath" }
+    $packageDocument = [System.Text.Json.JsonDocument]::Parse([System.IO.File]::ReadAllText($packagePath))
+    try {
+        $packageVersion = $packageDocument.RootElement.GetProperty('version').GetString()
+    } finally {
+        $packageDocument.Dispose()
+    }
+    if ([string]::IsNullOrWhiteSpace($packageVersion)) { throw 'package.json version must not be empty.' }
+    $codecovRef = "$tagPrefix$packageVersion$releaseSuffix"
 
     $encodedProjectPath = [Uri]::EscapeDataString($artifactPath)
     $encodedJsrPackage = $jsrPackage.Replace('@', '%40')
@@ -109,12 +128,14 @@ function Update-JSHeader {
     $generatedHeader = [System.IO.File]::ReadAllText($templateFullPath)
     $replacements = [ordered]@{
         '{{ALIGNMENT}}' = $alignment
+        '{{PROJECT_NAME}}' = $projectName
         '{{DISPLAY_NAME}}' = $name
         '{{BANNER_URL}}' = $bannerUrl
         '{{PROJECT_PATH}}' = $projectPath
         '{{GITLAB_BASE_URI}}' = $baseUri
         '{{BADGE_QUERY}}' = $badgeQuery
         '{{LATEST_TAG}}' = $latestTag
+        '{{CODECOV_REF}}' = $codecovRef
         '{{CODECOV_TOKEN}}' = $codecovToken
         '{{BADGE_COLOR}}' = $badgeColor
         '{{BADGE_STYLE}}' = $badgeStyle
@@ -132,21 +153,45 @@ function Update-JSHeader {
     foreach ($entry in $replacements.GetEnumerator()) { $generatedHeader = $generatedHeader.Replace($entry.Key, [string]$entry.Value) }
     if ($generatedHeader -match '\{\{[A-Z0-9_]+\}\}') { throw "README header template contains unresolved token '$($Matches[0])'." }
 
-    $original = [System.IO.File]::ReadAllText($readmePath)
-    $lineEnding = if ($original.Contains("`r`n")) { "`r`n" } else { "`n" }
-    $generatedHeader = $generatedHeader.Replace("`r`n", "`n").Replace("`n", $lineEnding)
-    $pattern = '(?ms)\A<div align="(?:left|center|right)">\r?\n.*?\r?\n</div>'
-    if (-not [regex]::IsMatch($original, $pattern)) { throw 'A leading aligned README header was not found.' }
-    $content = [regex]::Replace($original, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($match) [void]$match; $generatedHeader.TrimEnd("`r", "`n") }, 1)
+    $targets = [System.Collections.Generic.List[object]]::new()
+    $targets.Add([pscustomobject]@{
+        Name = 'README.md'; Path = $readmePath; Header = $generatedHeader
+        Pattern = '(?ms)\A<div align="(?:left|center|right)">\r?\n.*?\r?\n</div>'
+        MissingMessage = 'A leading aligned README header was not found.'
+    })
 
-    if ($content -eq $original) {
-        Write-Output "README header already matches configuration for $latestTag."
-        return
+    $npmReadmePath = [System.IO.Path]::Combine($repositoryPath, 'README-npm.md')
+    if ([System.IO.File]::Exists($npmReadmePath)) {
+        if ([string]::IsNullOrWhiteSpace($NpmTemplatePath)) {
+            $NpmTemplatePath = [System.IO.Path]::Combine($PSScriptRoot, '..', 'templates', 'js', 'README-npm.header.md.template')
+        }
+        $npmTemplateFullPath = [System.IO.Path]::GetFullPath($NpmTemplatePath)
+        if (-not [System.IO.File]::Exists($npmTemplateFullPath)) { throw "npm README header template not found: $npmTemplateFullPath" }
+        $npmHeader = [System.IO.File]::ReadAllText($npmTemplateFullPath)
+        foreach ($entry in $replacements.GetEnumerator()) { $npmHeader = $npmHeader.Replace($entry.Key, [string]$entry.Value) }
+        if ($npmHeader -match '\{\{[A-Z0-9_]+\}\}') { throw "npm README header template contains unresolved token '$($Matches[0])'." }
+        $targets.Add([pscustomobject]@{
+            Name = 'README-npm.md'; Path = $npmReadmePath; Header = $npmHeader
+            Pattern = '(?ms)\A.*?(?=\r?\n---\r?\n)'
+            MissingMessage = 'A leading npm README header followed by a horizontal rule was not found.'
+        })
     }
-    if ($DryRun) {
-        Write-Output "Would rebuild README header for $latestTag."
-    } elseif ($PSCmdlet.ShouldProcess($readmePath, "Rebuild $alignment-aligned project header for $latestTag")) {
-        [System.IO.File]::WriteAllText($readmePath, $content, [System.Text.UTF8Encoding]::new($false))
-        Write-Output "Rebuilt README header for $latestTag."
+
+    foreach ($target in $targets) {
+        $original = [System.IO.File]::ReadAllText($target.Path)
+        if (-not [regex]::IsMatch($original, $target.Pattern)) { throw $target.MissingMessage }
+        $lineEnding = if ($original.Contains("`r`n")) { "`r`n" } else { "`n" }
+        $targetHeader = $target.Header.Replace("`r`n", "`n").Replace("`n", $lineEnding).TrimEnd("`r", "`n")
+        if ($target.Name -eq 'README-npm.md') { $targetHeader += $lineEnding }
+        $content = [regex]::Replace($original, $target.Pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($match) [void]$match; $targetHeader }, 1)
+
+        if ($content -eq $original) {
+            Write-Output "$($target.Name) header already matches configuration for $latestTag."
+        } elseif ($DryRun) {
+            Write-Output "Would rebuild $($target.Name) header for $latestTag."
+        } elseif ($PSCmdlet.ShouldProcess($target.Path, "Rebuild project header for $latestTag")) {
+            [System.IO.File]::WriteAllText($target.Path, $content, [System.Text.UTF8Encoding]::new($false))
+            Write-Output "Rebuilt $($target.Name) header for $latestTag."
+        }
     }
 }

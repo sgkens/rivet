@@ -88,7 +88,7 @@ Executing `run.ps1` without explicit action switches runs the default metadata m
 4. Regenerates the Markdown table of contents within the collapsible `<details>` block via `New-MarkdownTOC.ps1`.
 5. Validates that required Markdown headings defined in `readme.requiredHeadings` are present in `README.md`.
 
-`README-npm.md` remains manually authored and is not modified during automated metadata passes.
+When `README-npm.md` exists, Rivet also regenerates its package header from `README-npm.header.md.template`; the package-specific body remains unchanged.
 
 ### Strict reference
 
