@@ -1,0 +1,10 @@
+<img src="{{GITLAB_BASE_URI}}/{{PROJECT_PATH}}/-/raw/{{DEFAULT_BRANCH}}/branding/{{PROJECT_NAME}}-logo.svg" width="64" height="64" alt="{{DISPLAY_NAME}} logo" />
+
+# **{{NPM_PACKAGE}}**
+
+[![npm-version](https://img.shields.io/npm/v/{{NPM_PACKAGE}}?style={{BADGE_STYLE}}&color=%23{{BADGE_COLOR}})](https://www.npmjs.com/package/{{NPM_PACKAGE}})
+[![jsr-version](https://img.shields.io/jsr/v/{{ENCODED_JSR_PACKAGE}}?style={{BADGE_STYLE}}&logo=jsr&color=%23{{BADGE_COLOR}})](https://jsr.io/{{ENCODED_JSR_PACKAGE}})
+[![codecov](https://codecov.io/gl/{{PROJECT_PATH}}/branch/{{CODECOV_REF}}/graph/badge.svg?token={{CODECOV_TOKEN}})](https://codecov.io/gl/{{PROJECT_PATH}})
+[![license](https://img.shields.io/npm/l/{{NPM_PACKAGE}}?style={{BADGE_STYLE}}&color=%23{{BADGE_COLOR}})]({{GITLAB_BASE_URI}}/{{PROJECT_PATH}})
+
+> **{{DISPLAY_NAME}}**{{DESCRIPTION_SUFFIX}}

@@ -236,6 +236,44 @@ Describe 'Test-ReadmeStructure' {
     }
 }
 
+Describe 'Update-JSHeader README variants' {
+    It 'updates repository and npm headers from one release version' {
+        $repo = Join-Path $TestDrive 'header-repo'
+        New-TestRepository -Root $repo -Version '1.0.0'
+        [System.IO.File]::WriteAllText((Join-Path $repo 'package.json'), '{"name":"@group/fixture","version":"1.2.3"}')
+        [System.IO.File]::WriteAllText((Join-Path $repo 'repo_meta.json'), '{"project":{"description":"Fixture is a test package."}}')
+        $configDocument = [ordered]@{
+            project = [ordered]@{
+                name = 'fixture'; displayName = 'Fixture'; path = 'group/fixture'; artifactPath = 'group/fixture'
+                defaultBranch = 'main'; npmPackage = '@group/fixture'; jsrPackage = '@group/fixture'
+                bannerUrl = 'https://example.invalid/banner.svg'; documentationUrl = 'https://example.invalid/docs'
+            }
+            readmeHeader = [ordered]@{
+                alignment = 'left'; badgeStyle = 'flat-square'; badgeColor = '#0087af'
+                labelColor = '#1c1c1c'; logoColor = '#ffffff'; codecovToken = 'TOKEN'
+            }
+            tagging = [ordered]@{ prefix = 'v'; releaseSuffix = '-release'; remote = 'origin' }
+            gitlab = [ordered]@{ baseUri = 'https://gitlab.example' }
+            metadataSource = 'repo_meta.json'
+        }
+        [System.IO.File]::WriteAllText((Join-Path $repo 'repo_config.json'), ($configDocument | ConvertTo-Json -Depth 8))
+        [System.IO.File]::WriteAllText((Join-Path $repo 'README.md'), "<div align=`"center`">`nold`n</div>`n`nMAIN BODY")
+        [System.IO.File]::WriteAllText((Join-Path $repo 'README-npm.md'), "old npm header`n`n---`n`nNPM BODY")
+
+        Update-JSHeader -RepositoryRoot $repo
+
+        $main = [System.IO.File]::ReadAllText((Join-Path $repo 'README.md'))
+        $npm = [System.IO.File]::ReadAllText((Join-Path $repo 'README-npm.md'))
+        $main | Should -Match 'branch/v1\.2\.3-release/graph/badge\.svg'
+        $npm | Should -Match 'branch/v1\.2\.3-release/graph/badge\.svg'
+        $main | Should -Match 'artifacts/v1\.0\.0/raw/runtime-badge-flat\.svg'
+        $main | Should -Match 'MAIN BODY'
+        $npm | Should -Match 'NPM BODY'
+        $npm | Should -Match '# \*\*@group/fixture\*\*'
+        $npm | Should -Match "test package\.`n`n---"
+    }
+}
+
 Describe 'ConvertFrom-ConventionalCommit' {
     It 'parses exact scopes and breaking changes' {
         $result = ConvertFrom-ConventionalCommit -Subject 'feat(core)!: add workflow'
@@ -867,6 +905,13 @@ Describe 'Show-RivetFlowGraph lifecycle rendering' {
         ($plain -join "`n") | Should -Match 'Git Worktree'
         ($plain -join "`n") | Should -Match 'SemVer Engine'
         ($plain -join "`n") | Should -Match 'GitLab Release'
+    }
+
+    It 'keeps the Pipeline layout within the terminal-width fallback' {
+        $lines = Show-RivetFlowGraph -Layout Pipeline -PassThru
+        $plain = $lines -replace "`e\[[0-9;]*[a-zA-Z]", ''
+        ($plain | ForEach-Object { $_.Length } | Measure-Object -Maximum).Maximum | Should -BeLessOrEqual 100
+        ($plain -join "`n") | Should -Match 'pipeline continues'
     }
 }
 

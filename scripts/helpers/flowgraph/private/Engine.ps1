@@ -565,6 +565,7 @@ function script:Render-Pipeline {
     $boxStyle  = $Options.BoxStyle  ?? 'Single'
     $connStyle = $Options.ConnStyle ?? 'Arrow'
     $useColor  = $Options.UseColor  ?? $true
+    $maxWidth  = $Options.MaxWidth  ?? 0
 
     $adj       = script:Build-Adjacency -Edges $Edges
     $topo      = @(script:Get-TopologicalOrder -Nodes $Nodes -Adjacency $adj)
@@ -575,31 +576,54 @@ function script:Render-Pipeline {
     $reset = if ($useColor) { $ui.Title.Reset ?? "`e[0m" } else { '' }
     $dimC  = if ($useColor) { "`e[90m" } else { '' }
 
-    $topCells = [System.Collections.Generic.List[hashtable]]::new()
-    $midCells = [System.Collections.Generic.List[hashtable]]::new()
-    $botCells = [System.Collections.Generic.List[hashtable]]::new()
+    $rows = [System.Collections.Generic.List[object]]::new()
+    $row = [System.Collections.Generic.List[object]]::new()
+    $rowWidth = 0
 
     for ($i = 0; $i -lt $topo.Count; $i++) {
         $nId = $topo[$i]
         $n   = $nodeMap[$nId]
         if (-not $n) { continue }
-        $box     = script:Render-NodeBox -Node $n -BoxStyle $boxStyle -UseColor $useColor
-        $topCells.Add(@{ Text = $box.Top;    Width = $box.Width; Align = 'Center' })
-        $midCells.Add(@{ Text = $box.Middle; Width = $box.Width; Align = 'Center' })
-        $botCells.Add(@{ Text = $box.Bottom; Width = $box.Width; Align = 'Center' })
+        $box = script:Render-NodeBox -Node $n -BoxStyle $boxStyle -UseColor $useColor
+        $requiredWidth = $box.Width + $(if ($row.Count -gt 0) { 4 } else { 0 })
+        if ($maxWidth -gt 0 -and $row.Count -gt 0 -and ($rowWidth + $requiredWidth) -gt $maxWidth) {
+            $rows.Add($row.ToArray())
+            $row = [System.Collections.Generic.List[object]]::new()
+            $rowWidth = 0
+        }
+        $row.Add($box)
+        $rowWidth += $box.Width + $(if ($row.Count -gt 1) { 4 } else { 0 })
+    }
+    if ($row.Count -gt 0) { $rows.Add($row.ToArray()) }
 
-        if ($i -lt $topo.Count - 1) {
-            $topCells.Add(@{ Text = ''; Width = 4; Align = 'Center' })
-            $midCells.Add(@{ Text = "$dimC $($conn.HLine)$($conn.Right)$reset "; Width = 4; Align = 'Center' })
-            $botCells.Add(@{ Text = ''; Width = 4; Align = 'Center' })
+    $lines = [System.Collections.Generic.List[string]]::new()
+    for ($rowIndex = 0; $rowIndex -lt $rows.Count; $rowIndex++) {
+        $boxes = @($rows[$rowIndex])
+        $topCells = [System.Collections.Generic.List[hashtable]]::new()
+        $midCells = [System.Collections.Generic.List[hashtable]]::new()
+        $botCells = [System.Collections.Generic.List[hashtable]]::new()
+
+        for ($boxIndex = 0; $boxIndex -lt $boxes.Count; $boxIndex++) {
+            $box = $boxes[$boxIndex]
+            $topCells.Add(@{ Text = $box.Top; Width = $box.Width; Align = 'Center' })
+            $midCells.Add(@{ Text = $box.Middle; Width = $box.Width; Align = 'Center' })
+            $botCells.Add(@{ Text = $box.Bottom; Width = $box.Width; Align = 'Center' })
+            if ($boxIndex -lt ($boxes.Count - 1)) {
+                $topCells.Add(@{ Text = ''; Width = 4; Align = 'Center' })
+                $midCells.Add(@{ Text = "$dimC $($conn.HLine)$($conn.Right)$reset "; Width = 4; Align = 'Center' })
+                $botCells.Add(@{ Text = ''; Width = 4; Align = 'Center' })
+            }
+        }
+
+        $lines.Add((Clap -Cells $topCells))
+        $lines.Add((Clap -Cells $midCells))
+        $lines.Add((Clap -Cells $botCells))
+        if ($rowIndex -lt ($rows.Count - 1)) {
+            $lines.Add("$dimC$($conn.Down) pipeline continues$reset")
         }
     }
 
-    return @(
-        (Clap -Cells $topCells)
-        (Clap -Cells $midCells)
-        (Clap -Cells $botCells)
-    )
+    return $lines.ToArray()
 }
 
 function script:Render-Tree {
