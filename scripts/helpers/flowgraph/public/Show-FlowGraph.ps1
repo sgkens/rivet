@@ -120,6 +120,15 @@ function Show-FlowGraph {
         [switch]$PassThru
     )
 
+    # ConvertTo-FlowGraph remains deterministic for files and embedding. Direct
+    # terminal rendering constrains Pipeline layouts to the active viewport.
+    if (($Graph.Layout ?? 'TopDown') -eq 'Pipeline' -and ($Graph.Options.MaxWidth ?? 0) -le 0) {
+        $terminalWidth = try { [Console]::WindowWidth } catch { 0 }
+        if ($terminalWidth -gt 0) {
+            $Graph.Options['MaxWidth'] = [Math]::Max(20, $terminalWidth - 1)
+        }
+    }
+
     $lines = ConvertTo-FlowGraph -Graph $Graph
     foreach ($line in $lines) { Write-Host $line }
 
