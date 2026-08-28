@@ -37,7 +37,8 @@ function Show-RivetFlowGraph {
         }
     }
 
-    $termWidth = try { [Console]::WindowWidth } catch { 100 }
+    $termWidth = try { [Console]::WindowWidth } catch { 0 }
+    if ($termWidth -le 0) { $termWidth = 100 }
     if ([string]::IsNullOrWhiteSpace($Layout)) {
         $Layout = if ($termWidth -ge 120) { 'Pipeline' } else { 'TopDown' }
     }
@@ -90,6 +91,7 @@ function Show-RivetFlowGraph {
         -Edges $edges `
         -Layout $Layout `
         -BoxStyle $BoxStyle `
+        -MaxWidth $(if ($Layout -eq 'Pipeline') { [Math]::Max(20, $termWidth - 2) } else { 0 }) `
         -Title 'RIVET AUTOMATION LIFECYCLE' `
         -Ui $emberUi `
         -ShowLegend $true

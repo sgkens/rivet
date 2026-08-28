@@ -43,6 +43,11 @@ function New-FlowGraph {
     .PARAMETER Indent
         Indentation width used by the Tree layout. Default: 4.
 
+    .PARAMETER MaxWidth
+        Maximum visible width used by the Pipeline layout. A value of zero leaves
+        converted output unconstrained; Show-FlowGraph resolves zero to the current
+        terminal width so long pipelines wrap between stages instead of terminal-wrapping.
+
     .PARAMETER Ui
         Optional theme object used to override box styles, connector styles,
         node colors, or title accents. This is merged with the module defaults.
@@ -104,6 +109,10 @@ function New-FlowGraph {
         [int]$ColWidth = 0,
 
         [Parameter()]
+        [ValidateRange(0, [int]::MaxValue)]
+        [int]$MaxWidth = 0,
+
+        [Parameter()]
         [Alias('Theme')]
         [hashtable]$Ui
     )
@@ -123,6 +132,7 @@ function New-FlowGraph {
             Indent    = $Indent
             Padding   = $Padding
             ColWidth  = $ColWidth
+            MaxWidth  = $MaxWidth
         }
     }
 }

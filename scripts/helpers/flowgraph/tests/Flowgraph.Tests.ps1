@@ -90,6 +90,23 @@ Describe 'Flowgraph module' {
         $widths[1] | Should -Be $widths[2]
     }
 
+    It 'wraps a pipeline between stages at the configured visible width' {
+        $graph = New-FlowGraph -Nodes @(
+            New-FlowNode 'a' 'Alpha stage' Process
+            New-FlowNode 'b' 'Beta stage' Process
+            New-FlowNode 'c' 'Gamma stage' End
+        ) -Edges @(
+            New-FlowEdge 'a' 'b'
+            New-FlowEdge 'b' 'c'
+        ) -Layout Pipeline -MaxWidth 34 -UseColor:$false -ShowLegend:$false
+
+        $lines = $graph | ConvertTo-FlowGraph
+        $widths = @($lines | ForEach-Object { $_.Length })
+        ($widths | Measure-Object -Maximum).Maximum | Should -BeLessOrEqual 34
+        ($lines -join "`n") | Should -Match 'pipeline continues'
+        ($lines -join "`n") | Should -Match 'Gamma stage'
+    }
+
     It 'supports gradient node styling' {
         $graph = New-FlowGraph -Nodes @(
             New-FlowNode 'a' 'Alpha' Process -Style @{
