@@ -144,7 +144,7 @@ function Show-SMenu {
         Muted      = "$esc[38;2;130;142;166m"
         Faint      = "$esc[38;2;82;94;118m"
         Selected   = "$esc[1;38;2;255;255;255m"
-        Multi      = "$esc[1;38;2;196;112;255m"
+        Single     = "$esc[1;38;2;255;255;255m"
         CardBorder = "$esc[38;2;255;130;0m"
         CardTitle  = "$esc[1;38;2;255;195;75m"
         Tag        = "$esc[38;2;0;200;255m"
@@ -161,6 +161,29 @@ function Show-SMenu {
         $multiProperty = $Item.PSObject.Properties['MultiAction']
         if ($null -ne $multiProperty -and [bool]$multiProperty.Value) { return "$label [MA]" }
         return $label
+    }
+
+    function Test-MultiAction([object]$Item) {
+        $property = $Item.PSObject.Properties['MultiAction']
+        return ($null -ne $property -and [bool]$property.Value)
+    }
+
+    function Format-MultiActionTitle([string]$Text) {
+        if ([string]::IsNullOrEmpty($Text)) { return '' }
+        $midpoint = [Math]::Max(1, [Math]::Ceiling($Text.Length / 2.0))
+        $first = $Text.Substring(0, $midpoint)
+        $second = if ($midpoint -lt $Text.Length) { $Text.Substring($midpoint) } else { '' }
+        $cyan = @(0, 210, 255)
+        $violet = @(196, 112, 255)
+        $magenta = @(255, 70, 180)
+        return (Format-GradientString -Text $first -Start $cyan -End $violet) +
+            (Format-GradientString -Text $second -Start $violet -End $magenta)
+    }
+
+    function Format-ItemTitle([object]$Item) {
+        $title = Get-ItemTitle $Item
+        if (Test-MultiAction $Item) { return Format-MultiActionTitle -Text $title }
+        return "$($colors.Single)$title$($colors.Reset)"
     }
 
     function Write-Frame([object]$Size) {
@@ -195,6 +218,10 @@ function Show-SMenu {
 
         $selectedItem = $Items[$currentIndex]
         $selectedDesc = if ($selectedItem.Description) { [string]$selectedItem.Description } else { 'No description provided.' }
+        $selectedCommandProperty = $selectedItem.PSObject.Properties['Command']
+        if ($null -ne $selectedCommandProperty -and -not [string]::IsNullOrWhiteSpace([string]$selectedCommandProperty.Value)) {
+            $selectedDesc = "$selectedDesc`n`nCLI  $([string]$selectedCommandProperty.Value)"
+        }
 
         # Prepare description lines for Card / Pager modes
         $cardInnerWidth = [Math]::Max(8, $layout.CardWidth - 4)
@@ -208,13 +235,8 @@ function Show-SMenu {
             $leftCell = ''
             if ($item) {
                 $selected = ($itemIndex -eq $currentIndex)
-                $titlePlain = Get-ItemTitle $item
-                $multi = $titlePlain.EndsWith(' [MA]', [System.StringComparison]::Ordinal)
-                $baseTitle = if ($multi) { $titlePlain.Substring(0, $titlePlain.Length - 5) } else { $titlePlain }
                 $marker = if ($selected) { ' > ' } elseif ($row -eq 0 -and $topIndex -gt 0) { ' ▲ ' } elseif ($row -eq ($layout.VisibleItems - 1) -and ($topIndex + $layout.VisibleItems) -lt $Items.Count) { ' ▼ ' } else { '   ' }
-                $titleColor = if ($selected) { $colors.Selected } else { $colors.Text }
-                $titleText = "$titleColor$baseTitle$($colors.Reset)"
-                if ($multi) { $titleText += "$($colors.Multi) [MA]$($colors.Reset)" }
+                $titleText = Format-ItemTitle $item
                 $leftCell = Pad-AnsiString -Text "$marker$titleText" -Width ($layout.LabelWidth + 3) -Align Left -Truncate
             } else {
                 $leftCell = ' ' * ($layout.LabelWidth + 3)
@@ -241,8 +263,8 @@ function Show-SMenu {
                         $cardRowText = "$($colors.CardBorder)╰$cardRule╯$($colors.Reset)"
                     }
                 } elseif ($row -eq 1) {
-                    $itemHeader = "▶ $(Get-ItemTitle $selectedItem)"
-                    $cardRowText = "$($colors.CardBorder)│$($colors.Reset) " + (Pad-AnsiString -Text "$($colors.Selected)$itemHeader$($colors.Reset)" -Width ($layout.CardWidth - 4) -Align Left -Truncate) + " $($colors.CardBorder)│$($colors.Reset)"
+                    $itemHeader = "▶ $(Format-ItemTitle $selectedItem)"
+                    $cardRowText = "$($colors.CardBorder)│$($colors.Reset) " + (Pad-AnsiString -Text $itemHeader -Width ($layout.CardWidth - 4) -Align Left -Truncate) + " $($colors.CardBorder)│$($colors.Reset)"
                 } else {
                     $offset = if ($currentDisplayMode -eq 'Pager') { $pagerOffset } else { 0 }
                     $lineIdx = $row - 2 + $offset

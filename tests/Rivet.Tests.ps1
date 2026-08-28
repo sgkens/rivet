@@ -673,15 +673,21 @@ Fixture changes.
 }
 
 Describe 'rivet command-center multi-action labels' {
-    It 'retains raw titles and renders MA after the menu title' {
+    It 'renders multi-action titles with three gradient anchors and single actions in white' {
         $menuSource = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot '../scripts/Invoke-RivetMenu.ps1'))
         $menuSource | Should -Not -Match '"\[MA\] \$Label"'
         $rendererSource = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot '../scripts/smenu.ps1'))
         $rendererSource | Should -Match 'return "\$label \[MA\]"'
+        $rendererSource | Should -Match '\$cyan\s*=\s*@\(0, 210, 255\)'
+        $rendererSource | Should -Match '\$violet\s*=\s*@\(196, 112, 255\)'
+        $rendererSource | Should -Match '\$magenta\s*=\s*@\(255, 70, 180\)'
+        $rendererSource | Should -Match 'Single\s*=\s*"\$esc\[1;38;2;255;255;255m"'
 
         @(
             'Initialize repository'
             'Prep Release'
+            'Release documents'
+            'Tag and publish'
             'Configuration and GitLab'
             'Preview release preparation'
             'Apply release preparation'
@@ -696,6 +702,15 @@ Describe 'rivet command-center multi-action labels' {
             $escapedLabel = [regex]::Escape($_)
             $menuSource | Should -Match "New-MenuItem '$escapedLabel'[^\r\n]+-MultiAction"
         }
+    }
+
+    It 'publishes CLI command guidance in actionable menu details' {
+        $menuSource = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot '../scripts/Invoke-RivetMenu.ps1'))
+        $rendererSource = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot '../scripts/smenu.ps1'))
+        $menuSource | Should -Match "New-MenuItem 'Repository status'[^\r\n]+-Command './rivet\.ps1 status'"
+        $menuSource | Should -Match "New-MenuItem 'Apply and commit'[^\r\n]+-Command './rivet\.ps1 prep-release -Commit"
+        $menuSource | Should -Match "New-MenuItem 'Push to GitLab'[^\r\n]+-Command './rivet\.ps1 work-items -PushIssues"
+        $rendererSource | Should -Match 'CLI  \$\(\[string\]\$selectedCommandProperty\.Value\)'
     }
 }
 

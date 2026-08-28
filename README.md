@@ -122,16 +122,18 @@ The command center exposes all Rivet workflows through `Show-SMenu`. Operations 
 
 - **Initialize repository**: Local configuration (npm / Bun) and GitLab metadata bootstrap.
 - **Prep Release**: Automated release preparation with preview, apply, and commit stages.
-- **Local metadata**: Manifest versioning, README header, TOC generation, and heading validation.
+- **Local metadata**: Independent or combined manifest versioning, README and README-npm headers, TOC generation, and heading validation, each with preview/apply control.
 - **Release documents**: Draft updates, finalized releases, changelog rebuilding, and JSON exports.
 - **Merge request**: `mr.md` generation, GitLab MR creation, and GitLab MR updating.
 - **GitLab metadata**: Remote topics, description, and label synchronization.
-- **Conventional commit**: Interactive type, scope, subject, and file staging.
-- **Tag and publish**: SemVer release tags and snapshot tags with remote safety verification.
+- **Conventional commit**: Interactive type, scope, subject, file staging, dry-run review, and optional metadata synchronization.
+- **Work items and tasks**: Local list/view/scaffold/close/reopen/dashboard actions plus explicit GitLab pull and push controls.
+- **Tag and publish**: SemVer release and snapshot tags with preview/apply, version override, and explicit local-tag replacement control.
 - **Git history**: Detailed graphical commit history view (`glo`).
+- **Repository inspection**: Status, version explanation, diagnostics, and the responsive lifecycle flow graph.
 - **Help**: Interactive parameter reference and usage manuals.
 
-The `[MA]` suffix denotes compound workflows executing multiple underlying operations. `Show-SMenu` manages the alternate terminal buffer, measures character width prior to ANSI truecolor encoding to eliminate tearing, and re-renders dynamically upon terminal resize.
+The `[MA]` suffix denotes a compound workflow that executes multiple underlying operations. Multi-action labels use a cyan-to-violet-to-magenta three-step gradient; single actions use bold white. Every actionable menu item exposes its CLI equivalent in the details panel, and the command-review screen shows the fully resolved command after prompts are applied. `Show-SMenu` manages the alternate terminal buffer, measures character width before ANSI truecolor encoding, and re-renders dynamically upon terminal resize.
 
 ### Strict reference
 
