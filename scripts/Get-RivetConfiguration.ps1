@@ -31,6 +31,8 @@ function Get-RivetConfiguration {
         }
     }
     if ($errors.Count) { throw "Invalid rivet configuration:`n - $($errors -join "`n - ")" }
+    $repositoryProfile = Get-RivetProfile -Config $config
+    & $repositoryProfile.ValidateConfig $config
     return $config
 }
 

@@ -3,12 +3,15 @@ function Initialize-RivetRepository {
     .SYNOPSIS
         Creates missing repository rivet configuration from templates.
     .DESCRIPTION
-        Infers safe project defaults from package.json, the current Git branch,
-        and the origin remote. Existing files are validated and never replaced.
-        Supports Bun runtime template initialization with -Bun while keeping
-        package.json as the canonical package and script definition.
-        Prefers .rivet/ directory for repo_config.json and repo_meta.json while
-        supporting root fallbacks.
+        Uses the selected repository profile and Git origin to infer defaults.
+        Creates missing files and preserves existing files. Missing profile
+        configuration defaults to jsm for compatibility.
+    .PARAMETER Profile
+        Installed profile name, used by init and bootstrap. Defaults to the existing configuration or jsm.
+    .PARAMETER Manifest
+        Repository-relative manifest path for profiles that require one (psm).
+    .PARAMETER ConfigPath
+        Optional destination for repo_config.json.
     .PARAMETER RepositoryRoot
         Directory where repository files will be initialized.
     .PARAMETER TemplateRoot
@@ -23,14 +26,23 @@ function Initialize-RivetRepository {
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string]$RepositoryRoot,
-        [Parameter(Mandatory)][string]$TemplateRoot,
+        [string]$TemplateRoot,
+        [string]$Profile,
+        [string]$Manifest,
+        [string]$ConfigPath,
         [switch]$Bun,
         [switch]$DryRun,
         [switch]$Raw
     )
 
     $repositoryPath = [System.IO.Path]::GetFullPath($RepositoryRoot)
-    $packagePath = [System.IO.Path]::Combine($repositoryPath, 'package.json')
+    if ([string]::IsNullOrWhiteSpace($ConfigPath)) { $ConfigPath = Resolve-RivetPath -RepositoryRoot $repositoryPath -ItemName 'repo_config.json' }
+    $existingConfig = if ([System.IO.File]::Exists($ConfigPath)) { Get-RivetConfiguration -ConfigPath $ConfigPath } else { $null }
+    $repositoryProfile = Get-RivetProfile -Name $Profile -Config $existingConfig
+    if ($null -ne $existingConfig -and $Profile -and (Get-RivetProfile -Config $existingConfig).Name -ne $repositoryProfile.Name) {
+        throw 'Initialization cannot change an existing repository profile. Edit repo_config.json explicitly.'
+    }
+    if ([string]::IsNullOrWhiteSpace($TemplateRoot)) { $TemplateRoot = $repositoryProfile.TemplateRoot }
     $projectName = (Split-Path $repositoryPath -Leaf)
     $namespace = 'staticcanvas'
 
@@ -46,19 +58,18 @@ function Initialize-RivetRepository {
         $projectPath = "$namespace/$projectName"
     }
 
-    if ([System.IO.File]::Exists($packagePath)) {
-        try {
-            $package = [System.IO.File]::ReadAllText($packagePath) | ConvertFrom-Json
-            if ($package.name) {
-                $packageName = [string]$package.name
-                $projectName = ($packageName -split '/')[-1]
-                if ($packageName.StartsWith('@')) { $namespace = ($packageName -split '/')[0].TrimStart('@') }
+    if ($null -ne $existingConfig -and $existingConfig.PSObject.Properties[$repositoryProfile.Name]) {
+        $settings = $existingConfig.($repositoryProfile.Name)
+        if ($settings.PSObject.Properties['manifest']) {
+            if ($Manifest -and $Manifest.Replace('\', '/') -ne ([string]$settings.manifest).Replace('\', '/')) {
+                throw 'Initialization cannot change an existing manifest setting. Edit repo_config.json explicitly.'
             }
-        } catch { }
-    } else {
-        $packageName = "@$namespace/$projectName"
+            $Manifest = [string]$settings.manifest
+        }
     }
-
+    $identity = & $repositoryProfile.Identity $repositoryPath $projectName $namespace $Manifest
+    $projectName = $identity.ProjectName
+    $namespace = $identity.Namespace
     $branch = (& git -C $repositoryPath branch --show-current 2>$null)
     if ([string]::IsNullOrWhiteSpace($branch)) { $branch = 'main' }
     $displayName = [System.Globalization.CultureInfo]::InvariantCulture.TextInfo.ToTitleCase(($projectName -replace '[-_]+', ' '))
@@ -68,35 +79,18 @@ function Initialize-RivetRepository {
         '{{NAMESPACE}}' = $namespace
         '{{PROJECT_PATH}}' = $projectPath
         '{{DEFAULT_BRANCH}}' = $branch.Trim()
-        '{{PACKAGE_NAME}}' = $packageName
+        '{{PROFILE}}' = $repositoryProfile.Name
     }
 
-    $templateFiles = [System.Collections.Generic.List[hashtable]]::new()
-    $templateFiles.Add(@{ File = 'repo_config.json'; Template = 'repo_config.json.template'; TokenReplace = $true; Mandatory = $true; RivetManaged = $true })
-    $templateFiles.Add(@{ File = 'repo_meta.json'; Template = 'repo_meta.json.template'; TokenReplace = $true; Mandatory = $true; RivetManaged = $true })
-    $templateFiles.Add(@{ File = 'package.json'; Template = 'package.json'; TokenReplace = $true; Mandatory = $false; RivetManaged = $false })
-    $templateFiles.Add(@{ File = 'jsr.jsonc'; Template = 'jsr.jsonc'; TokenReplace = $true; Mandatory = $false; RivetManaged = $false })
-
-    $includeBun = $Bun -or [System.IO.File]::Exists([System.IO.Path]::Combine($repositoryPath, 'bunfig.toml')) -or [System.IO.File]::Exists([System.IO.Path]::Combine($repositoryPath, 'bun.lock'))
-    if ($includeBun) {
-        $templateFiles.Add(@{ File = 'bunfig.toml'; Template = 'bunfig.toml'; TokenReplace = $false; Mandatory = $false; RivetManaged = $false })
-        $templateFiles.Add(@{ File = 'bun.lock'; Template = 'bun.lock'; TokenReplace = $true; Mandatory = $false; RivetManaged = $false })
-    }
-
-    $templateFiles.Add(@{ File = 'vite.config.js'; Template = 'vite.config.js'; TokenReplace = $true; Mandatory = $false; RivetManaged = $false })
-    $templateFiles.Add(@{ File = 'vite.optional.config.js'; Template = 'vite.optional.config.js'; TokenReplace = $true; Mandatory = $false; RivetManaged = $false })
-    $templateFiles.Add(@{ File = 'eslint.config.js'; Template = 'eslint.config.js'; TokenReplace = $false; Mandatory = $false; RivetManaged = $false })
-    $templateFiles.Add(@{ File = '.prettierrc'; Template = '.prettierrc'; TokenReplace = $false; Mandatory = $false; RivetManaged = $false })
-    $templateFiles.Add(@{ File = '.gitignore'; Template = '.gitignore'; TokenReplace = $false; Mandatory = $false; RivetManaged = $false })
-    $templateFiles.Add(@{ File = '.gitlab-ci.yml'; Template = '.gitlab-ci.yml'; TokenReplace = $false; Mandatory = $false; RivetManaged = $false })
-    $templateFiles.Add(@{ File = 'scripts/check-bundle-size.mjs'; Template = 'scripts/check-bundle-size.mjs'; TokenReplace = $false; Mandatory = $false; RivetManaged = $false })
-    $templateFiles.Add(@{ File = 'scripts/validate-release.mjs'; Template = 'scripts/validate-release.mjs'; TokenReplace = $false; Mandatory = $false; RivetManaged = $false })
+    foreach ($key in $identity.Tokens.Keys) { $tokens[$key] = [string]$identity.Tokens[$key] }
+    $templateFiles = @(& $repositoryProfile.Templates $repositoryPath $tokens ([bool]$Bun))
 
     $results = [System.Collections.Generic.List[object]]::new($templateFiles.Count)
     foreach ($entry in $templateFiles) {
         $fileName = $entry.File
+        foreach ($tokenEntry in $tokens.GetEnumerator()) { $fileName = $fileName.Replace($tokenEntry.Key, $tokenEntry.Value) }
         $destination = if ($entry.RivetManaged) {
-            Resolve-RivetPath -RepositoryRoot $repositoryPath -ItemName $fileName
+            if ($fileName -eq 'repo_config.json') { $ConfigPath } else { Resolve-RivetPath -RepositoryRoot $repositoryPath -ItemName $fileName }
         } else {
             [System.IO.Path]::Combine($repositoryPath, ($fileName -replace '/', [System.IO.Path]::DirectorySeparatorChar))
         }
@@ -125,7 +119,7 @@ function Initialize-RivetRepository {
         }
     }
 
-    if (-not $DryRun) {
+    if (-not $DryRun -and -not $WhatIfPreference) {
         $workItemsDir = [System.IO.Path]::Combine($repositoryPath, '.rivet', 'work-items')
         if (-not [System.IO.Directory]::Exists($workItemsDir)) {
             [System.IO.Directory]::CreateDirectory($workItemsDir) | Out-Null

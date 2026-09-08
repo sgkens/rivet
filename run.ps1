@@ -15,6 +15,8 @@ param(
     [switch]$Init,
     [switch]$Bootstrap,
     [switch]$Bun,
+    [string]$Profile,
+    [string]$Manifest,
     [switch]$PrepRelease,
     [switch]$Doctor,
     [switch]$Status,

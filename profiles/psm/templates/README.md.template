@@ -1,0 +1,36 @@
+<!-- rivet:header:start -->
+# {{DISPLAY_NAME}}
+
+PowerShell module
+<!-- rivet:header:end -->
+
+<details>
+<summary><strong>Table of Contents</strong></summary>
+
+</details>
+
+## Features
+
+Describe the module's features.
+
+## Installation
+
+Document how to install the module.
+
+## Quick Start
+
+```powershell
+Import-Module ./{{MANIFEST}}
+```
+
+## API Reference
+
+Document exported commands.
+
+## Development
+
+Document local development and testing.
+
+## License
+
+Specify the repository license.

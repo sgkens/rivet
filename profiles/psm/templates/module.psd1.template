@@ -1,0 +1,9 @@
+@{
+    RootModule = '{{MODULE_NAME}}.psm1'
+    ModuleVersion = '0.1.0'
+    GUID = '{{MODULE_GUID}}'
+    FunctionsToExport = @()
+    CmdletsToExport = @()
+    VariablesToExport = @()
+    AliasesToExport = @()
+}

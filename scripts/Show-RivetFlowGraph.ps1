@@ -46,7 +46,7 @@ function Show-RivetFlowGraph {
     $nodes = @(
         (New-FlowNode 'git'       'Git Worktree'    Start    -Meta 'context')
         (New-FlowNode 'doctor'    'Doctor Checks'   Decision -Meta 'health')
-        (New-FlowNode 'init'      'Init / Scaffold' Process  -Meta 'npm | bun')
+        (New-FlowNode 'init'      'Init / Scaffold' Process  -Meta 'repository profile')
         (New-FlowNode 'version'   'SemVer Engine'   Process  -Meta 'conventional')
         (New-FlowNode 'manifests' 'Manifest Sync'   IO       -Meta 'package | jsr')
         (New-FlowNode 'docs'      'Release Docs'    Process  -Meta 'changelog | notes')

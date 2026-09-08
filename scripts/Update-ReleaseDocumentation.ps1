@@ -13,7 +13,7 @@ function Update-ReleaseDocumentation {
         Optional reachable Git tag or ref used instead of the latest GitLab
         release tag as the beginning of the range.
     .PARAMETER Version
-        Release version. Defaults to package.json.
+        Release version. Defaults to the selected profile manifest.
     .PARAMETER Finalize
         Writes the generated changelog block under a dated version heading
         instead of the Unreleased heading.
@@ -347,9 +347,8 @@ $notesEnd
     }
 
     if ([string]::IsNullOrWhiteSpace($Version)) {
-        $packagePath = [System.IO.Path]::Combine($repositoryPath, 'package.json')
-        $packageDocument = [System.Text.Json.JsonDocument]::Parse([System.IO.File]::ReadAllText($packagePath))
-        try { $Version = $packageDocument.RootElement.GetProperty('version').GetString() } finally { $packageDocument.Dispose() }
+        $repositoryProfile = Get-RivetProfile -Config $config
+        $Version = & $repositoryProfile.ReadVersion $repositoryPath $config
     }
     $Version = $Version.TrimStart('v')
 
