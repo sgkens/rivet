@@ -21,6 +21,8 @@ $runtimeFiles = @(
     [System.IO.Path]::Combine($helperRoot, 'datetime', 'Get-ElaspedTime.ps1')
     [System.IO.Path]::Combine($scriptsRoot, 'asciitokenizer.ps1')
     [System.IO.Path]::Combine($scriptsRoot, 'lazylog.ps1')
+    [System.IO.Path]::Combine($scriptsRoot, 'Get-RivetProfile.ps1')
+    [System.IO.Path]::Combine($scriptsRoot, 'Get-RivetPSModuleManifest.ps1')
     [System.IO.Path]::Combine($scriptsRoot, 'Get-RivetConfiguration.ps1')
     [System.IO.Path]::Combine($scriptsRoot, 'Initialize-RivetRepository.ps1')
     [System.IO.Path]::Combine($scriptsRoot, 'ConvertFrom-ConventionalCommit.ps1')

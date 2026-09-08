@@ -1,0 +1,5 @@
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+# Dot-source module functions here and explicitly export the public commands.
+Export-ModuleMember -Function @()

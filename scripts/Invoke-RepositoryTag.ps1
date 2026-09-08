@@ -81,14 +81,8 @@ function Invoke-RepositoryTag {
         $upstreamState = "$upstream | ahead $ahead | behind $behind"
     }
 
-    $manifestVersions = [System.Collections.Generic.List[string]]::new(2)
-    foreach ($manifestName in @('package.json', 'jsr.jsonc')) {
-        $manifestPath = [System.IO.Path]::Combine($repositoryPath, $manifestName)
-        if (-not [System.IO.File]::Exists($manifestPath)) { continue }
-        $documentOptions = [System.Text.Json.JsonDocumentOptions]@{ CommentHandling = 'Skip'; AllowTrailingCommas = $true }
-        $document = [System.Text.Json.JsonDocument]::Parse([System.IO.File]::ReadAllText($manifestPath), $documentOptions)
-        try { $manifestVersions.Add("$manifestName=$($document.RootElement.GetProperty('version').GetString())") } finally { $document.Dispose() }
-    }
+    $repositoryProfile = Get-RivetProfile -Config $config
+    $manifestVersions = @(& $repositoryProfile.ReviewVersions $repositoryPath $config)
 
     $mode = if ($Snapshot) { 'SNAPSHOT  CI validation only' } else { 'PRODUCTION  CI publish and release' }
     [Console]::WriteLine('')

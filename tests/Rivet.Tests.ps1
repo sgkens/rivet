@@ -4,6 +4,8 @@ BeforeAll {
     foreach ($name in @(
         'asciitokenizer.ps1',
         'lazylog.ps1',
+        'Get-RivetProfile.ps1',
+        'Get-RivetPSModuleManifest.ps1',
         'Get-RivetConfiguration.ps1',
         'Initialize-RivetRepository.ps1',
         'Test-ReadmeStructure.ps1',
@@ -1203,5 +1205,192 @@ Describe 'SMenu description display modes' {
         $layout.Wide | Should -Be $true
         $layout.DescriptionDisplay | Should -Be 'Pager'
         $layout.CardWidth | Should -BeGreaterThan 20
+    }
+}
+
+Describe 'Repository profiles' {
+    BeforeAll {
+        function New-PSProfileRepository {
+            param([string]$Root)
+            [System.IO.Directory]::CreateDirectory($Root) | Out-Null
+            Invoke-TestGit $Root init --initial-branch=main | Out-Null
+            Invoke-TestGit $Root config user.name testuser | Out-Null
+            Invoke-TestGit $Root config user.email test@example.invalid | Out-Null
+            Initialize-RivetRepository -RepositoryRoot $Root -Profile psm -Manifest 'src/Fixture.psd1' -Raw -Confirm:$false | Out-Null
+            Invoke-TestGit $Root add --all | Out-Null
+            Invoke-TestGit $Root commit -m 'chore: initialize module' | Out-Null
+            Invoke-TestGit $Root tag v0.1.0 | Out-Null
+            return Resolve-RivetPath -RepositoryRoot $Root -ItemName 'repo_config.json'
+        }
+    }
+
+    It 'defaults legacy configuration to jsm and rejects unknown or empty profiles' {
+        (Get-RivetProfile).Name | Should -Be 'jsm'
+        (Get-RivetProfile -Config ([pscustomobject]@{})).Name | Should -Be 'jsm'
+        { Get-RivetProfile -Name 'missing-profile' } | Should -Throw '*Unknown repository profile*'
+        { Get-RivetProfile -Name '../psm' } | Should -Throw '*Invalid repository profile*'
+        { Get-RivetProfile -Config ([pscustomobject]@{ profile = '' }) } | Should -Throw '*Invalid repository profile*'
+    }
+
+    It 'previews psm initialization without creating files and respects WhatIf' {
+        $repo = Join-Path $TestDrive 'psm-preview'
+        [System.IO.Directory]::CreateDirectory($repo) | Out-Null
+        Invoke-TestGit $repo init --initial-branch=main | Out-Null
+        $preview = @(Initialize-RivetRepository -RepositoryRoot $repo -Profile psm -Manifest 'Fixture.psd1' -DryRun -Raw)
+        $preview.File | Should -Contain 'Fixture.psd1'
+        $preview.File | Should -Not -Contain 'package.json'
+        @([System.IO.Directory]::GetFiles($repo)).Count | Should -Be 0
+        Initialize-RivetRepository -RepositoryRoot $repo -Profile psm -WhatIf -Raw | Out-Null
+        Test-Path (Join-Path $repo '.rivet') | Should -BeFalse
+    }
+
+    It 'initializes a nested PowerShell module and preserves existing files on repeat initialization' {
+        $repo = Join-Path $TestDrive 'psm-init'
+        $configPath = New-PSProfileRepository $repo
+        $config = Get-RivetConfiguration $configPath
+        $config.profile | Should -Be 'psm'
+        $config.psm.manifest | Should -Be 'src/Fixture.psd1'
+        Test-Path (Join-Path $repo 'package.json') | Should -BeFalse
+        Test-Path (Join-Path $repo 'src/Fixture.psm1') | Should -BeTrue
+        $before = [System.IO.File]::ReadAllText((Join-Path $repo 'src/Fixture.psd1'))
+        Initialize-RivetRepository -RepositoryRoot $repo -Raw -Confirm:$false | Out-Null
+        [System.IO.File]::ReadAllText((Join-Path $repo 'src/Fixture.psd1')) | Should -BeExactly $before
+        (Test-RivetRepository -RepositoryRoot $repo -ConfigPath $configPath).Ready | Should -BeTrue
+    }
+
+    It 'requires an explicit manifest when root module manifests are ambiguous' {
+        $repo = Join-Path $TestDrive 'psm-ambiguous'
+        [System.IO.Directory]::CreateDirectory($repo) | Out-Null
+        Invoke-TestGit $repo init --initial-branch=main | Out-Null
+        foreach ($name in @('One', 'Two')) { [System.IO.File]::WriteAllText((Join-Path $repo "$name.psd1"), "@{ ModuleVersion = '1.0.0' }") }
+        { Initialize-RivetRepository -RepositoryRoot $repo -Profile psm -Raw } | Should -Throw '*Multiple module manifests*'
+        { Initialize-RivetRepository -RepositoryRoot $repo -Profile psm -Manifest '../Outside.psd1' -Raw } | Should -Throw '*inside the repository*'
+        Test-Path (Join-Path $repo 'repo_config.json') | Should -BeFalse
+    }
+
+    It 'rejects profile changes and invalid profile configuration before repository writes' {
+        $repo = Join-Path $TestDrive 'psm-invalid'
+        $configPath = New-PSProfileRepository $repo
+        { Initialize-RivetRepository -RepositoryRoot $repo -Profile jsm -Raw } | Should -Throw '*cannot change*'
+        $config = Get-RivetConfiguration $configPath
+        $config.profile = 'missing-profile'
+        [System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 20))
+        $before = [System.IO.File]::ReadAllText((Join-Path $repo 'src/Fixture.psd1'))
+        { Invoke-Rivet -RepositoryRoot $repo -Raw } | Should -Throw '*Unknown repository profile*'
+        [System.IO.File]::ReadAllText((Join-Path $repo 'src/Fixture.psd1')) | Should -BeExactly $before
+        $config.profile = 'psm'
+        $config.psm.manifest = '../Outside.psd1'
+        [System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 20))
+        { Get-RivetConfiguration $configPath } | Should -Throw '*repository-relative*'
+    }
+
+    It 'updates only the literal top-level ModuleVersion and preserves other data and CRLF' {
+        $repo = Join-Path $TestDrive 'psm-version'
+        $configPath = New-PSProfileRepository $repo
+        $config = Get-RivetConfiguration $configPath
+        $profile = Get-RivetProfile -Config $config
+        $path = Join-Path $repo 'src/Fixture.psd1'
+        $original = "@{`r`n    # ModuleVersion = '9.9.9'`r`n    ModuleVersion = '0.1.0' # retained`r`n    PrivateData = @{ ModuleVersion = '8.8.8' }`r`n}`r`n"
+        [System.IO.File]::WriteAllText($path, $original)
+        & $profile.UpdateVersion $repo $config '1.2.3' $true | Out-Null
+        [System.IO.File]::ReadAllText($path) | Should -BeExactly $original
+        & $profile.UpdateVersion $repo $config '1.2.3' $false | Out-Null
+        [System.IO.File]::ReadAllText($path) | Should -BeExactly ($original.Replace("ModuleVersion = '0.1.0'", "ModuleVersion = '1.2.3'"))
+        (& $profile.ReadVersion $repo $config) | Should -Be '1.2.3'
+        { & $profile.UpdateVersion $repo $config '1.2.3-beta' $false } | Should -Throw '*stable*'
+    }
+
+    It 'runs the complete local psm workflow in a repository with JavaScript tooling' {
+        $repo = Join-Path $TestDrive 'psm-mixed'
+        $configPath = New-PSProfileRepository $repo
+        [System.IO.File]::WriteAllText((Join-Path $repo 'package.json'), '{"name":"docs","version":"9.0.0"}')
+        [System.IO.File]::WriteAllText((Join-Path $repo 'bunfig.toml'), '')
+        Invoke-TestGit $repo add --all | Out-Null
+        Invoke-TestGit $repo commit -m 'feat: add documentation tools' | Out-Null
+        { Invoke-Rivet -RepositoryRoot $repo -Raw } | Should -Not -Throw
+        (Get-RivetPSModuleManifest -RepositoryRoot $repo -Manifest 'src/Fixture.psd1').Version | Should -Be '0.2.0'
+        [System.IO.File]::ReadAllText((Join-Path $repo 'package.json')) | Should -BeExactly '{"name":"docs","version":"9.0.0"}'
+        [System.IO.File]::ReadAllText((Join-Path $repo 'README.md')) | Should -Match 'Version 0.2.0'
+        $doctor = Test-RivetRepository -RepositoryRoot $repo -ConfigPath $configPath
+        $doctor.Ready | Should -BeTrue
+        $doctor.Checks.Name | Should -Not -Contain 'Bun runtime'
+    }
+
+    It 'prepares psm release documents and merge requests without JavaScript manifests' {
+        $repo = Join-Path $TestDrive 'psm-release'
+        $configPath = New-PSProfileRepository $repo
+        [System.IO.File]::AppendAllText((Join-Path $repo 'README.md'), "`nNew feature.`n")
+        Invoke-TestGit $repo add --all | Out-Null
+        Invoke-TestGit $repo commit -m 'feat: add feature' | Out-Null
+        $before = @(& git -C $repo status --porcelain) -join "`n"
+        { Invoke-Rivet -RepositoryRoot $repo -Command prep-release -FromTag v0.1.0 -DryRun -Raw } | Should -Not -Throw
+        (@(& git -C $repo status --porcelain) -join "`n") | Should -BeExactly $before
+        { Invoke-Rivet -RepositoryRoot $repo -Command prep-release -FromTag v0.1.0 -Raw } | Should -Not -Throw
+        [System.IO.File]::ReadAllText((Join-Path $repo 'CHANGELOG.md')) | Should -Match '0.2.0'
+        $mr = [System.IO.File]::ReadAllText((Resolve-RivetPath -RepositoryRoot $repo -ItemName 'mr.md'))
+        $mr | Should -Match 'repository manifest versions to `0.2.0`'
+        $mr | Should -Not -Match 'npm|jsr.jsonc'
+        # Standalone helpers must also resolve the profile, without an explicit Version.
+        { Update-MergeRequestDocumentation -RepositoryRoot $repo -FromTag v0.1.0 -DryRun } | Should -Not -Throw
+        { Update-ReleaseDocumentation -RepositoryRoot $repo -ConfigPath $configPath -FromTag v0.1.0 -DryRun } | Should -Not -Throw
+        $config = Get-RivetConfiguration $configPath
+        $profile = Get-RivetProfile -Config $config
+        @(& $profile.ReleaseFiles $repo $config) | Should -Contain 'src/Fixture.psd1'
+        @(& $profile.ReviewVersions $repo $config) | Should -Contain 'src/Fixture.psd1=0.2.0'
+    }
+
+    It 'blocks a PowerShell tag when the module version differs from the proposed tag' {
+        $repo = Join-Path $TestDrive 'psm-tag'
+        $configPath = New-PSProfileRepository $repo
+        $remote = Join-Path $TestDrive 'psm-tag-remote.git'
+        & git init --bare $remote | Out-Null
+        Invoke-TestGit $repo remote add origin $remote | Out-Null
+        Invoke-TestGit $repo push --set-upstream origin main | Out-Null
+        $result = Invoke-RepositoryTag -RepositoryRoot $repo -ConfigPath $configPath -Version 0.2.0 -DryRun
+        $result.Ready | Should -BeFalse
+        $result.Blockers -join ' ' | Should -Match 'src/Fixture.psd1=0.1.0'
+        $ready = Invoke-RepositoryTag -RepositoryRoot $repo -ConfigPath $configPath -Version 0.1.0 -DryRun
+        $ready.Ready | Should -BeTrue
+    }
+
+    It 'selects the PowerShell manifest and shared release files for release commit review' {
+        $repo = Join-Path $TestDrive 'psm-release-selection'
+        $configPath = New-PSProfileRepository $repo
+        [System.IO.File]::AppendAllText((Join-Path $repo 'README.md'), "`nNew feature.`n")
+        Invoke-TestGit $repo add --all | Out-Null
+        Invoke-TestGit $repo commit -m 'feat: add feature' | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $repo 'package.json'), '{"version":"9.0.0"}')
+        Mock Invoke-RepositoryCommit { [pscustomobject]@{ Submitted = $false; Subject = 'fixture' } }
+        Invoke-Rivet -RepositoryRoot $repo -Command prep-release -FromTag v0.1.0 -Commit -Raw | Out-Null
+        Should -Invoke Invoke-RepositoryCommit -Times 1 -Exactly -ParameterFilter {
+            'src/Fixture.psd1' -in $Files -and 'CHANGELOG.md' -in $Files -and 'package.json' -notin $Files
+        }
+    }
+
+    It 'loads an added profile and dispatches its handler without router edits' {
+        $repo = Join-Path $TestDrive 'additional-profile'
+        $configPath = New-PSProfileRepository $repo
+        $name = 'fixture-' + [guid]::NewGuid().ToString('N')
+        $folder = Join-Path $script:RivetRoot "profiles/$name"
+        try {
+            [System.IO.Directory]::CreateDirectory($folder) | Out-Null
+            $baseProfile = (Join-Path $script:RivetRoot 'profiles/psm/profile.ps1').Replace("'", "''")
+            $source = @'
+$definition = & '__BASE__'
+$definition.UpdateVersion = {
+    param($RepositoryRoot, $Config, $Version, $DryRun)
+    if (-not $DryRun) { [System.IO.File]::WriteAllText([System.IO.Path]::Combine($RepositoryRoot, 'custom-version.txt'), $Version) }
+}
+$definition
+'@.Replace('__BASE__', $baseProfile)
+            [System.IO.File]::WriteAllText((Join-Path $folder 'profile.ps1'), $source)
+            $config = Get-RivetConfiguration $configPath
+            $config.profile = $name
+            [System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 20))
+            { Invoke-Rivet -RepositoryRoot $repo -SkipReadmeMetadata -SkipTableOfContents -SkipReadmeValidation -Raw } | Should -Not -Throw
+            [System.IO.File]::ReadAllText((Join-Path $repo 'custom-version.txt')) | Should -Be '0.1.0'
+        } finally {
+            if ([System.IO.Directory]::Exists($folder)) { [System.IO.Directory]::Delete($folder, $true) }
+        }
     }
 }

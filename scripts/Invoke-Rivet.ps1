@@ -28,6 +28,12 @@
 .PARAMETER Bootstrap
     Initializes configuration and synchronizes GitLab project metadata.
 
+.PARAMETER Profile
+    Installed repository profile used by init and bootstrap. Defaults to existing configuration or jsm.
+
+.PARAMETER Manifest
+    Repository-relative manifest path used by init and bootstrap.
+
 .PARAMETER PrepRelease
     Prepares all standard release metadata (manifests, docs, and mr.md).
 
@@ -174,6 +180,8 @@ function Invoke-Rivet {
         [switch]$Init,
         [switch]$Bootstrap,
         [switch]$Bun,
+        [string]$Profile,
+        [string]$Manifest,
         [switch]$PrepRelease,
         [switch]$Doctor,
         [switch]$Status,
@@ -285,6 +293,12 @@ function Invoke-Rivet {
         [System.IO.Path]::GetFullPath($ConfigPath)
     }
 
+    $profileConfig = if ([System.IO.File]::Exists($resolvedConfigPath)) { Get-RivetConfiguration -ConfigPath $resolvedConfigPath } else { $null }
+    $repositoryProfile = Get-RivetProfile -Config $profileConfig
+    if (($Profile -or $Manifest) -and -not ($Command -in @('init', 'bootstrap') -or $Init -or $Bootstrap)) {
+        throw '-Profile and -Manifest are initialization options. Subsequent commands use repo_config.json.'
+    }
+
     if ($Command -eq 'menu' -or $Menu) {
         Invoke-RivetMenu -RunnerPath $runnerScript -ConfigPath $resolvedConfigPath -RepositoryRoot $resolvedRepoRoot
         return
@@ -356,14 +370,12 @@ function Invoke-Rivet {
     }
 
     if ($Command -eq 'init' -or $Init) {
-        $templateRoot = [System.IO.Path]::Combine($moduleRoot, 'templates', 'js')
-        $null = Initialize-RivetRepository -RepositoryRoot $resolvedRepoRoot -TemplateRoot $templateRoot -Bun:$Bun -DryRun:$DryRun -Confirm:$false
+        $null = Initialize-RivetRepository -RepositoryRoot $resolvedRepoRoot -Profile $Profile -Manifest $Manifest -ConfigPath $resolvedConfigPath -Bun:$Bun -DryRun:$DryRun -Confirm:$false
         return
     }
 
     if ($Command -eq 'bootstrap' -or $Bootstrap) {
-        $templateRoot = [System.IO.Path]::Combine($moduleRoot, 'templates', 'js')
-        $null = Initialize-RivetRepository -RepositoryRoot $resolvedRepoRoot -TemplateRoot $templateRoot -Bun:$Bun -DryRun:$DryRun -Confirm:$false
+        $null = Initialize-RivetRepository -RepositoryRoot $resolvedRepoRoot -Profile $Profile -Manifest $Manifest -ConfigPath $resolvedConfigPath -Bun:$Bun -DryRun:$DryRun -Confirm:$false
         if ($DryRun) {
             [Console]::WriteLine((Format-AnsiText -Text 'GitLab metadata synchronization will run after configuration is applied.' -Color @(145, 155, 175)))
             return
@@ -441,7 +453,7 @@ function Invoke-Rivet {
         $PrepRelease = $true
         $FinalizeRelease = $true
         $UpdateMergeRequest = $true
-        if ($Commit -and -not $CommitAll -and -not @($CommitFiles).Count) {
+        if ($Commit -and -not $CommitAll -and -not $CommitFiles) {
             $prepReleaseDefaultCommitSelection = $true
         }
     }
@@ -455,7 +467,7 @@ function Invoke-Rivet {
         try {
             Write-LazyLog -Level act -Title 'VERSION' -Message 'Calculating version from Conventional Commits.' -Log
             $version = Get-ConventionalCommitVersion -RepositoryRoot $resolvedRepoRoot
-            $null = @(Update-JSLibSemver -Version $version.Version -RepositoryRoot $resolvedRepoRoot -DryRun:$DryRun *>&1)
+            $null = @(& $repositoryProfile.UpdateVersion $resolvedRepoRoot $profileConfig $version.Version ([bool]$DryRun) *>&1)
             Write-LazyLog -Level suc -Title 'VERSION' -Message "Resolved $($version.Version) using a $($version.BumpType) bump across $($version.CommitsScanned) commits." -Log
             Add-ReportRow -State 'OK' -Label 'VERSION' -Detail "$($version.Version) | $($version.BumpType) | $($version.CommitsScanned) commits"
         } catch {
@@ -470,8 +482,8 @@ function Invoke-Rivet {
         Add-ReportRow -State 'SKIP' -Label 'HEADER' -Detail 'disabled by switch'
     } else {
         try {
-            Write-LazyLog -Level act -Title 'HEADER' -Message 'Rendering the centered README header from repository configuration.' -Log
-            $null = @(Update-JSHeader -RepositoryRoot $resolvedRepoRoot -ConfigPath $resolvedConfigPath -DryRun:$DryRun *>&1)
+            Write-LazyLog -Level act -Title 'HEADER' -Message 'Processing the README header using the repository profile.' -Log
+            $null = @(& $repositoryProfile.UpdateHeader $resolvedRepoRoot $profileConfig $resolvedConfigPath ([bool]$DryRun) *>&1)
             $modeDetail = if ($DryRun) { 'configuration-driven header previewed' } else { 'configuration-driven header synchronized' }
             Write-LazyLog -Level suc -Title 'HEADER' -Message $modeDetail -Log
             Add-ReportRow -State 'OK' -Label 'HEADER' -Detail $modeDetail
@@ -505,7 +517,7 @@ function Invoke-Rivet {
         Add-ReportRow -State 'SKIP' -Label 'README' -Detail 'required-heading validation disabled'
     } else {
         try {
-            Write-LazyLog -Level act -Title 'README' -Message 'Validating required JavaScript library sections.' -Log
+            Write-LazyLog -Level act -Title 'README' -Message 'Validating configured README sections.' -Log
             $readmeResult = Test-ReadmeStructure -RepositoryRoot $resolvedRepoRoot -ConfigPath $resolvedConfigPath -Quiet
             if (-not $readmeResult.Ready) {
                 $missingNames = @($readmeResult.Missing | ForEach-Object { "H$($_.Level) $($_.Heading)" })
@@ -546,6 +558,7 @@ function Invoke-Rivet {
             }
             if (-not [string]::IsNullOrWhiteSpace($FromTag)) { $releaseParameters.FromTag = $FromTag }
             if (-not [string]::IsNullOrWhiteSpace($ReleaseVersion)) { $releaseParameters.Version = $ReleaseVersion }
+            elseif (-not $SkipVersion) { $releaseParameters.Version = $version.Version }
             if (-not [string]::IsNullOrWhiteSpace($CommitScope)) { $releaseParameters.Scope = $CommitScope }
             $null = @(Update-ReleaseDocumentation @releaseParameters *>&1)
             $modeDetail = if ($DryRun -and $RebuildChangelog) {
@@ -584,6 +597,7 @@ function Invoke-Rivet {
             }
             if (-not [string]::IsNullOrWhiteSpace($FromTag)) { $mergeRequestParameters.FromTag = $FromTag }
             if (-not [string]::IsNullOrWhiteSpace($ReleaseVersion)) { $mergeRequestParameters.Version = $ReleaseVersion }
+            elseif (-not $SkipVersion) { $mergeRequestParameters.Version = $version.Version }
             if (-not [string]::IsNullOrWhiteSpace($CommitScope)) { $mergeRequestParameters.Scope = $CommitScope }
             $null = @(Update-MergeRequestDocumentation @mergeRequestParameters *>&1)
             $modeDetail = if ($DryRun) { 'merge-request documentation previewed' } else { 'merge-request documentation synchronized' }
@@ -653,13 +667,13 @@ function Invoke-Rivet {
             if (-not [string]::IsNullOrWhiteSpace($CommitScope)) { $commitParameters.Scope = $CommitScope }
             if (-not [string]::IsNullOrWhiteSpace($CommitDescription)) { $commitParameters.Description = $CommitDescription }
             if ($prepReleaseDefaultCommitSelection) {
-                $releaseFileSet = [System.Collections.Generic.HashSet[string]]::new(@('package.json', 'package-lock.json', 'jsr.jsonc', 'bun.lock', 'bunfig.toml', 'CHANGELOG.md', 'release-notes.md', 'docs/data/changelog.json', 'README.md', 'README-npm.md'), [System.StringComparer]::Ordinal)
+                $releaseFileSet = [System.Collections.Generic.HashSet[string]]::new([string[]](@('CHANGELOG.md', 'release-notes.md', 'docs/data/changelog.json', 'README.md') + @(& $repositoryProfile.ReleaseFiles $resolvedRepoRoot $profileConfig)), [System.StringComparer]::Ordinal)
                 $changedReleaseFiles = @(& git -C $resolvedRepoRoot status --porcelain=v1 --untracked-files=all) | ForEach-Object {
                     if ($_.Length -gt 3) { $_.Substring(3).Trim('"') }
                 } | Where-Object { $releaseFileSet.Contains($_) }
                 if (-not @($changedReleaseFiles).Count) { throw 'Prep Release did not produce any tracked release-file changes to commit.' }
                 $commitParameters.Files = @($changedReleaseFiles)
-            } elseif (@($CommitFiles).Count) { $commitParameters.Files = $CommitFiles }
+            } elseif ($CommitFiles) { $commitParameters.Files = $CommitFiles }
             if ($CommitAll) { $commitParameters.All = $true }
             $commitResult = Invoke-RepositoryCommit @commitParameters
             $commitDetail = if ($commitResult.Submitted) { "submitted | $($commitResult.Subject)" } elseif ($DryRun) { "previewed | $($commitResult.Subject)" } else { 'cancelled by user' }

@@ -1,4 +1,5 @@
 {
+  "profile": "{{PROFILE}}",
   "project": {
     "name": "{{PROJECT_NAME}}",
     "displayName": "{{DISPLAY_NAME}}",

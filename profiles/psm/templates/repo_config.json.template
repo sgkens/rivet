@@ -1,0 +1,175 @@
+{
+  "profile": "{{PROFILE}}",
+  "project": {
+    "name": "{{PROJECT_NAME}}",
+    "displayName": "{{DISPLAY_NAME}}",
+    "namespace": "{{NAMESPACE}}",
+    "path": "{{PROJECT_PATH}}",
+    "artifactPath": "{{PROJECT_PATH}}",
+    "defaultBranch": "{{DEFAULT_BRANCH}}",
+    "bannerUrl": "https://example.invalid/{{PROJECT_NAME}}-banner.svg",
+    "documentationUrl": "https://{{NAMESPACE}}.gitlab.io/{{PROJECT_NAME}}"
+  },
+  "readmeHeader": {
+    "alignment": "left",
+    "badgeStyle": "flat-square",
+    "badgeColor": "#0087af",
+    "labelColor": "#1c1c1c",
+    "logoColor": "#ffffff",
+    "codecovToken": ""
+  },
+  "readme": {
+    "requiredHeadings": [
+      {
+        "level": 2,
+        "name": "Features"
+      },
+      {
+        "level": 2,
+        "name": "Installation"
+      },
+      {
+        "level": 2,
+        "name": "Quick Start"
+      },
+      {
+        "level": 2,
+        "name": "API Reference"
+      },
+      {
+        "level": 2,
+        "name": "Development"
+      },
+      {
+        "level": 2,
+        "name": "License"
+      }
+    ]
+  },
+  "commit": {
+    "defaultType": "feat",
+    "defaultScope": "core",
+    "defaultDescription": "update module",
+    "types": [
+      {
+        "name": "feat",
+        "description": "add or change user-facing behavior"
+      },
+      {
+        "name": "fix",
+        "description": "correct defective behavior"
+      },
+      {
+        "name": "docs",
+        "description": "change documentation only"
+      },
+      {
+        "name": "refactor",
+        "description": "restructure without behavior changes"
+      },
+      {
+        "name": "perf",
+        "description": "improve runtime performance"
+      },
+      {
+        "name": "test",
+        "description": "add or correct tests"
+      },
+      {
+        "name": "build",
+        "description": "change build or dependencies"
+      },
+      {
+        "name": "ci",
+        "description": "change continuous integration"
+      },
+      {
+        "name": "chore",
+        "description": "perform repository maintenance"
+      },
+      {
+        "name": "revert",
+        "description": "revert an earlier commit"
+      }
+    ],
+    "scopes": [
+      {
+        "name": "rivet",
+        "description": "repository metadata automation",
+        "paths": [
+          "rivet.ps1"
+        ]
+      },
+      {
+        "name": "core",
+        "description": "PowerShell module",
+        "paths": [
+          "*.psm1",
+          "*.psd1",
+          "Public/**",
+          "Private/**",
+          "tests/**"
+        ]
+      },
+      {
+        "name": "docs",
+        "description": "documentation site and guides",
+        "paths": [
+          "docs/**",
+          "public/**",
+          "editors/**",
+          "README*.md"
+        ]
+      },
+      {
+        "name": "release",
+        "description": "versioning and release assets",
+        "paths": [
+          "{{MANIFEST}}",
+          "CHANGELOG.md",
+          "release-notes.md",
+          "README.md",
+          "docs/data/changelog.json"
+        ]
+      },
+      {
+        "name": "ci",
+        "description": "pipeline configuration",
+        "paths": [
+          ".gitlab-ci.yml",
+          "ci-failures.md"
+        ]
+      },
+      {
+        "name": "none",
+        "description": "omit the commit scope",
+        "paths": [
+          "**"
+        ]
+      }
+    ],
+    "preview": {
+      "maxDiffLines": 240
+    }
+  },
+  "authors": {
+    "mappings": []
+  },
+  "tagging": {
+    "prefix": "v",
+    "releaseSuffix": "-release",
+    "remote": "origin"
+  },
+  "gitlab": {
+    "baseUri": "https://gitlab.com",
+    "projectId": "",
+    "tokenEnvironmentVariable": "GITLAB_API_KEY"
+  },
+  "metadataSource": "repo_meta.json",
+  "labelScope": "project",
+  "defaultTextColor": "#FFFFFF",
+  "requestTimeoutSeconds": 30,
+  "psm": {
+    "manifest": "{{MANIFEST}}"
+  }
+}

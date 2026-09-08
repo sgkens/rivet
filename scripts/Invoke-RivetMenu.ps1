@@ -30,6 +30,7 @@ function Invoke-RivetMenu {
     $projectName = 'repository'
     $packageName = 'package'
     $packageVersion = 'unversioned'
+    $menuConfig = $null
     if ([System.IO.File]::Exists($ConfigPath)) {
         $menuConfig = [System.IO.File]::ReadAllText($ConfigPath) | ConvertFrom-Json
         if ($null -ne $menuConfig.project -and -not [string]::IsNullOrWhiteSpace([string]$menuConfig.project.displayName)) {
@@ -37,14 +38,9 @@ function Invoke-RivetMenu {
         }
     }
     $repositoryRoot = [System.IO.Path]::GetFullPath($RepositoryRoot)
-    $packagePath = [System.IO.Path]::Combine($repositoryRoot, 'package.json')
-    if ([System.IO.File]::Exists($packagePath)) {
-        $packageDocument = [System.Text.Json.JsonDocument]::Parse([System.IO.File]::ReadAllText($packagePath))
-        try {
-            $packageName = $packageDocument.RootElement.GetProperty('name').GetString()
-            $packageVersion = $packageDocument.RootElement.GetProperty('version').GetString()
-        } finally { $packageDocument.Dispose() }
-    }
+    $menuProfile = Get-RivetProfile -Config $menuConfig
+    $packageName = $menuProfile.Name
+    try { $packageVersion = & $menuProfile.ReadVersion $repositoryRoot $menuConfig } catch { }
 
     function New-MenuItem([string]$Label, [object]$Value, [string]$Description = '', [switch]$MultiAction, [string]$Command = '') {
         [pscustomobject]@{
@@ -296,7 +292,7 @@ function Invoke-RivetMenu {
     }
 
     $mainItems = @(
-        (New-MenuItem 'Initialize repository' 'init' 'Choose local npm or Bun scaffolding, or combine scaffolding with GitLab project metadata synchronization. Preview mode reports every target before any file or remote mutation.' -MultiAction -Command './rivet.ps1 init | bootstrap [-Bun] [-DryRun]')
+        (New-MenuItem 'Initialize repository' 'init' 'Choose a repository profile and initialize locally, or combine initialization with GitLab project metadata synchronization. Preview mode reports every target before any file or remote mutation.' -MultiAction -Command './rivet.ps1 init | bootstrap [-Bun] [-DryRun]')
         (New-MenuItem 'Prep Release' 'prep_release' 'Run the complete release-preparation chain: resolve SemVer, synchronize manifests and both README headers, generate release documents and mr.md, and optionally create the release commit.' -MultiAction -Command './rivet.ps1 prep-release [-DryRun] [-Commit]')
         (New-MenuItem 'Local metadata' 'local' 'Control each local metadata operation independently or run the combined set: manifest version synchronization, README/README-npm header generation, TOC generation, and README contract validation.' -MultiAction -Command './rivet.ps1 [metadata skip switches] [-DryRun]')
         (New-MenuItem 'Release documents' 'release' 'Choose draft generation, finalization, or full historical changelog reconstruction. Scope, baseline, attribution, JSON output, and preview behavior are configured before execution.' -MultiAction -Command './rivet.ps1 -UpdateReleaseDocs | -FinalizeRelease | -RebuildChangelog')
@@ -323,16 +319,33 @@ function Invoke-RivetMenu {
 
         switch ($action) {
             'init' {
+                $selectedProfile = $menuProfile.Name
+                if ($null -eq $menuConfig) {
+                    $profilesRoot = [System.IO.Path]::Combine($PSScriptRoot, '..', 'profiles')
+                    $profileItems = @([System.IO.Directory]::GetDirectories($profilesRoot) | Sort-Object | ForEach-Object {
+                        if ([System.IO.File]::Exists([System.IO.Path]::Combine($_, 'profile.ps1'))) {
+                            $name = [System.IO.Path]::GetFileName($_)
+                            New-MenuItem $name $name "Initialize using the $name repository profile."
+                        }
+                    })
+                    $selectedProfile = Select-MenuValue -Title 'REPOSITORY PROFILE' -Items $profileItems
+                    if ($null -eq $selectedProfile) { continue }
+                }
                 $kind = Select-MenuValue -Title 'INITIALIZE REPOSITORY' -Items @(
-                    (New-MenuItem 'Local configuration' 'local' 'Create repository configuration, metadata, JavaScript tooling, validation scripts, and CI files without contacting GitLab. Existing files are reported and preserved by the initializer.' -Command './rivet.ps1 init [-DryRun]')
-                    (New-MenuItem 'Local configuration (Bun)' 'local_bun' 'Create the local repository scaffold plus Bun configuration and lockfile templates. No GitLab API operation is performed.' -Command './rivet.ps1 init -Bun [-DryRun]')
-                    (New-MenuItem 'Configuration and GitLab' 'gitlab' 'Create the local npm/Node scaffold, then synchronize the configured GitLab description, topics, and managed label catalog.' -MultiAction -Command './rivet.ps1 bootstrap [-DryRun]')
-                    (New-MenuItem 'Configuration and GitLab (Bun)' 'gitlab_bun' 'Create the Bun-oriented local scaffold, then synchronize the configured GitLab description, topics, and managed label catalog.' -MultiAction -Command './rivet.ps1 bootstrap -Bun [-DryRun]')
+                    (New-MenuItem 'Local configuration' 'local' 'Create repository configuration, metadata, and profile templates without contacting GitLab. Existing files are reported and preserved by the initializer.' -Command './rivet.ps1 init [-DryRun]')
+                    if ($selectedProfile -eq 'jsm') { (New-MenuItem 'Local configuration (Bun)' 'local_bun' 'Create the local repository scaffold plus Bun configuration and lockfile templates. No GitLab API operation is performed.' -Command './rivet.ps1 init -Bun [-DryRun]') }
+                    (New-MenuItem 'Configuration and GitLab' 'gitlab' 'Create the selected profile scaffold, then synchronize the configured GitLab description, topics, and managed label catalog.' -MultiAction -Command './rivet.ps1 bootstrap [-DryRun]')
+                    if ($selectedProfile -eq 'jsm') { (New-MenuItem 'Configuration and GitLab (Bun)' 'gitlab_bun' 'Create the Bun-oriented local scaffold, then synchronize the configured GitLab description, topics, and managed label catalog.' -MultiAction -Command './rivet.ps1 bootstrap -Bun [-DryRun]') }
                 )
                 if ($null -eq $kind) { continue }
                 $isBun = $kind -in @('local_bun', 'gitlab_bun')
                 $isGitlab = $kind -in @('gitlab', 'gitlab_bun')
                 $p = if ($isGitlab) { [ordered]@{ Bootstrap = $true } } else { [ordered]@{ Init = $true } }
+                $p.Profile = $selectedProfile
+                if ($null -eq $menuConfig) {
+                    $manifestPath = Read-OptionalValue 'Manifest path if needed; blank uses profile defaults'
+                    if ($manifestPath) { $p.Manifest = $manifestPath }
+                }
                 if ($isBun) { $p.Bun = $true }
                 if (-not (Select-PreviewMode $p)) { continue }
                 $titleText = if ($isGitlab) {
@@ -360,7 +373,7 @@ function Invoke-RivetMenu {
                 $choice = Select-MenuValue -Title 'LOCAL METADATA' -Items @(
                     (New-MenuItem 'Preview all' 'preview_all' 'Preview manifest version resolution, both README headers, TOC generation, and README validation without changing the worktree.' -MultiAction -Command './rivet.ps1 -DryRun')
                     (New-MenuItem 'Apply all' 'apply_all' 'Synchronize manifest versions, README and README-npm headers, the managed README TOC, and required-heading validation in one run.' -MultiAction -Command './rivet.ps1')
-                    (New-MenuItem 'Version only' 'version' 'Calculate the Conventional Commit bump and write only package.json and jsr.jsonc; README and documentation operations are skipped.' -Command './rivet.ps1 -SkipReadmeMetadata -SkipTableOfContents')
+                    (New-MenuItem 'Version only' 'version' 'Calculate the Conventional Commit bump and update the selected profile manifests; README and documentation operations are skipped.' -Command './rivet.ps1 -SkipReadmeMetadata -SkipTableOfContents')
                     (New-MenuItem 'README headers only' 'header' 'Regenerate the metadata-driven headers in README.md and README-npm.md while leaving manifests, TOC content, and release documents unchanged.' -Command './rivet.ps1 -SkipVersion -SkipTableOfContents')
                     (New-MenuItem 'README TOC only' 'toc' 'Regenerate only the managed H2-H4 table of contents in README.md; manifest and header synchronization are skipped.' -Command './rivet.ps1 -SkipVersion -SkipReadmeMetadata')
                     (New-MenuItem 'Validate README' 'validate_readme' 'Audit README.md against the required heading contract in repo_config.json without modifying either README.' -Command './rivet.ps1 readme')
