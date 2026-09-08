@@ -27,6 +27,47 @@ Rivet is an automation engine for JavaScript repository metadata, SemVer calcula
 - **Static Site Generator Integration**: Exports structured data (`docs/data/changelog.json` and `docs/data/releases.json`) consumable by Hugo, Eleventy (11ty), and Jekyll.
 - **Responsive Terminal User Interface (TUI)**: Features an alternate-screen interactive menu (`smenu.ps1`) with layout auto-detection (wide dual-column vs narrow stacked), multi-action indicators (`[MA]`), and truecolor ANSI rendering.
 
+## Repository profiles
+
+Rivet supports JavaScript modules (`jsm`) and PowerShell modules (`psm`). Select the
+primary release artifact with a top-level `profile` property in `repo_config.json`;
+existing configuration without that property continues to use `jsm`.
+Shared `project`, `commit`, `tagging`, `readme`, and GitLab settings keep their current structure.
+
+From a consuming repository with the Rivet launcher:
+
+```powershell
+./rivet.ps1 init -Profile psm -Manifest src/MyModule.psd1 -DryRun
+./rivet.ps1 init -Profile psm -Manifest src/MyModule.psd1
+./rivet.ps1 doctor
+```
+
+Initialization saves `"profile": "psm"` and `"psm": { "manifest": "src/MyModule.psd1" }`.
+Subsequent commands read that selection from configuration. A single module manifest
+at the repository root can be inferred; multiple manifests require `-Manifest`.
+Initialization preserves existing files and rejects attempts to switch an existing
+profile or manifest through initialization options.
+
+The selected profile controls templates, manifest versions, README headers,
+repository checks, release checklists, and release-file selection. Git history,
+Conventional Commits, work items, tagging policy, and release documentation remain shared.
+A PowerShell repository can contain JavaScript documentation tooling without Rivet
+updating its JavaScript package versions. One profile represents one primary release
+artifact; independently versioned packages in a monorepo are outside this initial scope.
+
+PowerShell version updates change only the literal top-level `ModuleVersion` in the
+configured `.psd1`, preserving comments and other manifest data. The updater accepts
+stable `major.minor.patch` versions and leaves existing prerelease metadata untouched.
+PowerShell README headers are updated only inside `rivet:header` markers; existing
+unmarked headers are preserved. New READMEs include those markers and the shared TOC
+block. Existing READMEs still need the configured headings and TOC block, or the
+corresponding skip switches.
+
+To add another makeup, add `profiles/<name>/profile.ps1` and its templates to the Rivet
+installation. No router registration or module export changes are needed. The menu
+discovers installed profile folders. See the [profile extension guide](profiles/README.md)
+for the handler contract and an example workflow.
+
 ## Installation in consuming repositories
 
 Add `rivet.ps1` to the consuming repository root and add `/rivet/` to `.gitignore`. The launcher clones `https://gitlab.com/staticcanvas/rivet.git` on first invocation (or the repository specified by the `RIVET_REPOSITORY_URL` environment variable) and forwards all parameters with the repository root explicitly bound.
@@ -122,16 +163,18 @@ The command center exposes all Rivet workflows through `Show-SMenu`. Operations 
 
 - **Initialize repository**: Local configuration (npm / Bun) and GitLab metadata bootstrap.
 - **Prep Release**: Automated release preparation with preview, apply, and commit stages.
-- **Local metadata**: Manifest versioning, README header, TOC generation, and heading validation.
+- **Local metadata**: Independent or combined manifest versioning, README and README-npm headers, TOC generation, and heading validation, each with preview/apply control.
 - **Release documents**: Draft updates, finalized releases, changelog rebuilding, and JSON exports.
 - **Merge request**: `mr.md` generation, GitLab MR creation, and GitLab MR updating.
 - **GitLab metadata**: Remote topics, description, and label synchronization.
-- **Conventional commit**: Interactive type, scope, subject, and file staging.
-- **Tag and publish**: SemVer release tags and snapshot tags with remote safety verification.
+- **Conventional commit**: Interactive type, scope, subject, file staging, dry-run review, and optional metadata synchronization.
+- **Work items and tasks**: Local list/view/scaffold/close/reopen/dashboard actions plus explicit GitLab pull and push controls.
+- **Tag and publish**: SemVer release and snapshot tags with preview/apply, version override, and explicit local-tag replacement control.
 - **Git history**: Detailed graphical commit history view (`glo`).
+- **Repository inspection**: Status, version explanation, diagnostics, and the responsive lifecycle flow graph.
 - **Help**: Interactive parameter reference and usage manuals.
 
-The `[MA]` suffix denotes compound workflows executing multiple underlying operations. `Show-SMenu` manages the alternate terminal buffer, measures character width prior to ANSI truecolor encoding to eliminate tearing, and re-renders dynamically upon terminal resize.
+The `[MA]` suffix denotes a compound workflow that executes multiple underlying operations. Multi-action labels use a cyan-to-violet-to-magenta three-step gradient; single actions use bold white. Every actionable menu item exposes its CLI equivalent in the details panel, and the command-review screen shows the fully resolved command after prompts are applied. `Show-SMenu` manages the alternate terminal buffer, measures character width before ANSI truecolor encoding, and re-renders dynamically upon terminal resize.
 
 ### Strict reference
 
@@ -859,6 +902,8 @@ flowchart TD
 
 | File               | Property                          | Type       | Description                                                                                                            |
 | ------------------ | --------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `repo_config.json` | `profile` | `string` | Installed repository makeup; defaults to `jsm` when absent. |
+| `repo_config.json` | `psm.manifest` | `string` | Repository-relative PowerShell module manifest path, required for `psm`. |
 | `repo_config.json` | `project`                         | `object`   | Defines project name, display name, namespace, project paths, default branch, package names, banner URL, and docs URL. |
 | `repo_config.json` | `readmeHeader`                    | `object`   | Controls header alignment (`left`/`center`), badge styling, hex colors, and Codecov token.                             |
 | `repo_config.json` | `readme.requiredHeadings`         | `object[]` | Array of required Markdown heading level and name objects (`level`, `name`) validated by `doctor` and `readme`.        |

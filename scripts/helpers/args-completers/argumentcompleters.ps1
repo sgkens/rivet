@@ -309,6 +309,8 @@ class RivetHelpParamCompleter : IArgumentCompleter {
             @{ Name = 'Menu'; ToolTip = 'Open the interactive rivet command center' }
             @{ Name = 'Init'; ToolTip = 'Initialize repository-root rivet configuration' }
             @{ Name = 'Bootstrap'; ToolTip = 'Initialize configuration and synchronize GitLab metadata' }
+            @{ Name = 'Profile'; ToolTip = 'Select an installed repository profile for initialization' }
+            @{ Name = 'Manifest'; ToolTip = 'Repository-relative manifest path for initialization' }
             @{ Name = 'Bun'; ToolTip = 'Include Bun runtime templates (bunfig.toml and bun.lock)' }
             @{ Name = 'PrepRelease'; ToolTip = 'Prepare all standard release metadata' }
             @{ Name = 'Doctor'; ToolTip = 'Validate rivet repository readiness' }

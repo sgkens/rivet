@@ -7,11 +7,11 @@ function Update-MergeRequestDocumentation {
         release identity, merge-request type, branch, range, commit changes,
         and the package-version checklist item from repository state.
     .PARAMETER RepositoryRoot
-        Repository containing mr.md and package.json.
+        Repository containing the selected profile manifest and mr.md.
     .PARAMETER FromTag
         Optional reachable Git ref used as the beginning of the change range.
     .PARAMETER Version
-        Release version. Defaults to package.json.
+        Release version. Defaults to the selected profile manifest.
     .PARAMETER TargetBranch
         Merge-request target branch. Defaults to main.
     .PARAMETER IncludeCommitHash
@@ -45,6 +45,7 @@ function Update-MergeRequestDocumentation {
         $ConfigPath = Resolve-RivetPath -RepositoryRoot $repositoryPath -ItemName 'repo_config.json'
     }
     $config = Get-RivetConfiguration -ConfigPath $ConfigPath
+    $repositoryProfile = Get-RivetProfile -Config $config
     $baseUri = ([string]$config.gitlab.baseUri).TrimEnd('/')
     $projectPath = ([string]$config.project.path).Trim('/')
     $projectName = [string]$config.project.displayName
@@ -59,9 +60,7 @@ function Update-MergeRequestDocumentation {
     if ($LASTEXITCODE -ne 0) { throw "FromTag '$FromTag' is not a reachable ancestor of HEAD." }
 
     if ([string]::IsNullOrWhiteSpace($Version)) {
-        $packagePath = [System.IO.Path]::Combine($repositoryPath, 'package.json')
-        $packageDocument = [System.Text.Json.JsonDocument]::Parse([System.IO.File]::ReadAllText($packagePath))
-        try { $Version = $packageDocument.RootElement.GetProperty('version').GetString() } finally { $packageDocument.Dispose() }
+        $Version = & $repositoryProfile.ReadVersion $repositoryPath $config
     }
     $Version = $Version.TrimStart('v')
     $sourceBranch = (& git -C $repositoryPath branch --show-current).Trim()
@@ -176,8 +175,8 @@ function Update-MergeRequestDocumentation {
         $updated = [regex]::Replace($updated, '(?ms)(^## \*{0,2}Summary\*{0,2}\s+).*?(?=^## \*{0,2}Compatibility\*{0,2})', "`$1$summaryBlock`n`n".Replace("`n", $lineEnding), 1)
     }
 
-    $packageChecklist = "- [ ] Update npm ``package.json`` and JSR ``jsr.jsonc`` package versions to ``$Version``."
-    $versionChecklistPattern = '(?m)^- \[[ xX]\] Update npm `package\.json` and JSR `jsr\.jsonc` package versions(?: to `[^`]+`)?\.'
+    $packageChecklist = & $repositoryProfile.ReleaseChecklist $Version
+    $versionChecklistPattern = '(?m)^- \[[ xX]\] Update (?:npm `package\.json` and JSR `jsr\.jsonc` package|repository manifest) versions(?: to `[^`]+`)?\.'
     if ([regex]::IsMatch($updated, $versionChecklistPattern)) {
         $updated = [regex]::Replace($updated, $versionChecklistPattern, $packageChecklist, 1)
     } else {

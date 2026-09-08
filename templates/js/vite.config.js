@@ -29,7 +29,10 @@ function stageWebUtilityAssets() {
       const brandingDestination = resolve('docs/static/webutil/assets/branding');
       mkdirSync(brandingDestination, { recursive: true });
       if (existsSync(resolve(`branding/${packageName}-logo.svg`))) {
-        cpSync(resolve(`branding/${packageName}-logo.svg`), resolve(brandingDestination, `${packageName}-logo.svg`));
+        cpSync(
+          resolve(`branding/${packageName}-logo.svg`),
+          resolve(brandingDestination, `${packageName}-logo.svg`)
+        );
       }
       const docsData = resolve('docs/data');
       mkdirSync(docsData, { recursive: true });
@@ -103,7 +106,12 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.js'],
-      exclude: ['**/node_modules/**', 'tests/**', `src/${packageName}-metrics.js`, `src/${packageName}-debug.js`],
+      exclude: [
+        '**/node_modules/**',
+        'tests/**',
+        `src/${packageName}-metrics.js`,
+        `src/${packageName}-debug.js`,
+      ],
     },
   },
   plugins: [

@@ -41,43 +41,15 @@ function Test-RivetRepository {
         Add-Check 'Git identity' $hasGitIdentity $identityDetail $false
     }
 
-    $node = Get-Command node -ErrorAction SilentlyContinue
-    $bun = Get-Command bun -ErrorAction SilentlyContinue
-    $hasBunConfig = [System.IO.File]::Exists([System.IO.Path]::Combine($RepositoryRoot, 'bunfig.toml')) -or [System.IO.File]::Exists([System.IO.Path]::Combine($RepositoryRoot, 'bun.lock'))
-    if ($hasBunConfig) {
-        Add-Check 'Bun runtime' ($null -ne $bun) $(if ($bun) { (& bun --version) } else { 'bunfig.toml/bun.lock present but bun not found in PATH' }) $true
-    } elseif ($null -ne $bun) {
-        Add-Check 'Bun runtime' $true (& bun --version) $false
-    }
-    if ($null -ne $node) {
-        Add-Check 'Node.js runtime' $true (& node --version) $false
-    } elseif (-not $hasBunConfig) {
-        Add-Check 'Node.js runtime' $false 'node not found in PATH' $false
-    }
-
-    foreach ($name in @('package.json', 'jsr.jsonc', 'README.md', 'CHANGELOG.md', 'release-notes.md')) {
+    foreach ($name in @('README.md', 'CHANGELOG.md', 'release-notes.md')) {
         Add-Check $name ([System.IO.File]::Exists([System.IO.Path]::Combine($RepositoryRoot, $name))) 'required repository file'
     }
-
-    $pkgPath = [System.IO.Path]::Combine($RepositoryRoot, 'package.json')
-    $jsrPath = [System.IO.Path]::Combine($RepositoryRoot, 'jsr.jsonc')
-    if ([System.IO.File]::Exists($pkgPath) -and [System.IO.File]::Exists($jsrPath)) {
+    if ($null -ne $config) {
         try {
-            $pkgJson = [System.IO.File]::ReadAllText($pkgPath) | ConvertFrom-Json
-            $jsrText = [System.IO.File]::ReadAllText($jsrPath)
-            $jsrMatch = [regex]::Match($jsrText, '"version"\s*:\s*"([^"]+)"')
-            $pkgVer = [string]$pkgJson.version
-            $jsrVer = if ($jsrMatch.Success) { $jsrMatch.Groups[1].Value } else { $null }
-            $versionsMatch = ($pkgVer -eq $jsrVer) -and -not [string]::IsNullOrWhiteSpace($pkgVer)
-            Add-Check 'Manifest versions' $versionsMatch $(if ($versionsMatch) { "$pkgVer (in sync)" } else { "package.json ($pkgVer) != jsr.jsonc ($jsrVer)" }) $true
-        } catch {
-            Add-Check 'Manifest versions' $false $_.Exception.Message $false
-        }
+            $repositoryProfile = Get-RivetProfile -Config $config
+            & $repositoryProfile.Checks $RepositoryRoot $config
+        } catch { Add-Check 'Profile checks' $false $_.Exception.Message }
     }
-
-    $hasLock = [System.IO.File]::Exists([System.IO.Path]::Combine($RepositoryRoot, 'package-lock.json')) -or [System.IO.File]::Exists([System.IO.Path]::Combine($RepositoryRoot, 'bun.lock'))
-    $lockDetail = if ([System.IO.File]::Exists([System.IO.Path]::Combine($RepositoryRoot, 'bun.lock'))) { 'bun.lock present' } elseif ([System.IO.File]::Exists([System.IO.Path]::Combine($RepositoryRoot, 'package-lock.json'))) { 'package-lock.json present' } else { 'no lockfile found' }
-    Add-Check 'Lockfile' $hasLock $lockDetail $false
 
     if ($null -ne $config) {
         $tokenName = [string]$config.gitlab.tokenEnvironmentVariable
