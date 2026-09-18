@@ -32,6 +32,7 @@ Preview the completed profile from a consuming repository (PowerShell):
 Use `profiles/jsm/profile.ps1` when adapting JavaScript conventions. Its template root
 points to the existing `templates/js` directory for compatibility. PowerShell's shipped
 templates live under `profiles/psm/templates`; `templates/psm` is not used by the runtime.
+Eleventy themes use `profiles/11ty/profile.ps1` with templates located under `templates/11ty`.
 
 ## Responsibilities
 
@@ -104,7 +105,7 @@ Invoke-Pester ./tests/Rivet.Tests.ps1
 
 | Field or option | Type | Default / contract |
 | --- | --- | --- |
-| `profile` | string | `jsm` when absent; installed lowercase name matching `^[a-z][a-z0-9-]*$` |
+| `profile` | string | `jsm` when absent; installed lowercase name matching `^[a-z0-9][a-z0-9-]*$` |
 | `psm.manifest` | string | Required for `psm`; repository-relative `.psd1` path within the repository |
 | `-Profile` | string | Existing configuration profile, otherwise `jsm`; init/bootstrap only |
 | `-Manifest` | string | Profile-specific initialization input; `psm` infers a single root module manifest or scaffolds `<project>.psd1` |
