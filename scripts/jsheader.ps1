@@ -73,8 +73,10 @@ function Update-JSHeader {
         $projectPath = $project.GetProperty('path').GetString()
         $artifactPath = $project.GetProperty('artifactPath').GetString()
         $defaultBranch = $project.GetProperty('defaultBranch').GetString()
-        $npmPackage = $project.GetProperty('npmPackage').GetString()
-        $jsrPackage = $project.GetProperty('jsrPackage').GetString()
+        $npmElement = [System.Text.Json.JsonElement]::new()
+        $npmPackage = if ($project.TryGetProperty('npmPackage', [ref]$npmElement)) { $npmElement.GetString() } else { '' }
+        $jsrElement = [System.Text.Json.JsonElement]::new()
+        $jsrPackage = if ($project.TryGetProperty('jsrPackage', [ref]$jsrElement)) { $jsrElement.GetString() } else { '' }
         $bannerUrl = $project.GetProperty('bannerUrl').GetString()
         $documentationUrl = $project.GetProperty('documentationUrl').GetString()
         $baseUri = $gitlab.GetProperty('baseUri').GetString().TrimEnd('/')
@@ -113,7 +115,7 @@ function Update-JSHeader {
     $codecovRef = "$tagPrefix$packageVersion$releaseSuffix"
 
     $encodedProjectPath = [Uri]::EscapeDataString($artifactPath)
-    $encodedJsrPackage = $jsrPackage.Replace('@', '%40')
+    $encodedJsrPackage = if ($jsrPackage) { $jsrPackage.Replace('@', '%40') } else { '' }
     $badgeQuery = "style=$badgeStyle&logo=gitlab&labelColor=%23$labelColor&color=%23$badgeColor&logoColor=%23$logoColor"
     $packageBadgeQuery = "style=$badgeStyle&logo=npm&labelColor=%23$labelColor&color=%23$badgeColor&logoColor=%23$logoColor"
     $jsrBadgeQuery = "style=$badgeStyle&logo=jsr&labelColor=%23$labelColor&color=%23$badgeColor&logoColor=%23$logoColor"

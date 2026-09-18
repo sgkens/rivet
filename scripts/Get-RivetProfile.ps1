@@ -13,7 +13,7 @@ function Get-RivetProfile {
         $property = if ($null -ne $Config) { $Config.PSObject.Properties['profile'] } else { $null }
         $Name = if ($null -ne $property) { [string]$property.Value } else { 'jsm' }
     }
-    if ($Name -cnotmatch '^[a-z][a-z0-9-]*$') { throw "Invalid repository profile '$Name'. Use a lowercase profile name." }
+    if ($Name -cnotmatch '^[a-z0-9][a-z0-9-]*$') { throw "Invalid repository profile '$Name'. Use a lowercase profile name." }
     $path = [System.IO.Path]::Combine($PSScriptRoot, '..', 'profiles', $Name, 'profile.ps1')
     if (-not [System.IO.File]::Exists($path)) { throw "Unknown repository profile '$Name'. Install profiles/$Name/profile.ps1 in Rivet." }
     $definition = & $path
