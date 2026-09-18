@@ -1227,6 +1227,7 @@ Describe 'Repository profiles' {
     It 'defaults legacy configuration to jsm and rejects unknown or empty profiles' {
         (Get-RivetProfile).Name | Should -Be 'jsm'
         (Get-RivetProfile -Config ([pscustomobject]@{})).Name | Should -Be 'jsm'
+        (Get-RivetProfile -Name '11ty').Name | Should -Be '11ty'
         { Get-RivetProfile -Name 'missing-profile' } | Should -Throw '*Unknown repository profile*'
         { Get-RivetProfile -Name '../psm' } | Should -Throw '*Invalid repository profile*'
         { Get-RivetProfile -Config ([pscustomobject]@{ profile = '' }) } | Should -Throw '*Invalid repository profile*'
@@ -1392,5 +1393,34 @@ $definition
         } finally {
             if ([System.IO.Directory]::Exists($folder)) { [System.IO.Directory]::Delete($folder, $true) }
         }
+    }
+
+    It 'initializes an 11ty theme repository, updates version, and passes doctor checks' {
+        $repo = Join-Path $TestDrive '11ty-init'
+        [System.IO.Directory]::CreateDirectory($repo) | Out-Null
+        Invoke-TestGit $repo init --initial-branch=main | Out-Null
+        Invoke-TestGit $repo config user.name testuser | Out-Null
+        Invoke-TestGit $repo config user.email test@example.invalid | Out-Null
+        $items = @(Initialize-RivetRepository -RepositoryRoot $repo -Profile 11ty -Raw -Confirm:$false)
+        $items.File | Should -Contain 'eleventy.config.js'
+        $items.File | Should -Contain 'package.json'
+        Test-Path (Join-Path $repo 'eleventy.config.js') | Should -BeTrue
+        Test-Path (Join-Path $repo 'package.json') | Should -BeTrue
+        Test-Path (Join-Path $repo 'README.md') | Should -BeTrue
+
+        $configPath = Resolve-RivetPath -RepositoryRoot $repo -ItemName 'repo_config.json'
+        $config = Get-RivetConfiguration $configPath
+        $config.profile | Should -Be '11ty'
+
+        $profile = Get-RivetProfile -Config $config
+        $profile.Name | Should -Be '11ty'
+        (& $profile.ReadVersion $repo $config) | Should -Be '0.1.0'
+
+        & $profile.UpdateVersion $repo $config '0.2.0' $false | Out-Null
+        (& $profile.ReadVersion $repo $config) | Should -Be '0.2.0'
+        (& $profile.ReviewVersions $repo $config) | Should -Contain 'package.json=0.2.0'
+
+        $doctor = Test-RivetRepository -RepositoryRoot $repo -ConfigPath $configPath
+        $doctor.Ready | Should -BeTrue
     }
 }
