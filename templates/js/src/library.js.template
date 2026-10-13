@@ -1,0 +1,3 @@
+/** Public entry point for {{DISPLAY_NAME}}. */
+
+export const name = '{{PROJECT_NAME}}';

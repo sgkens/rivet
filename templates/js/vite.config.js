@@ -1,141 +1,88 @@
-import { defineConfig } from 'vite';
-import copy from 'rollup-plugin-copy';
-import { resolve } from 'node:path';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
 import terser from '@rollup/plugin-terser';
+import { defineConfig } from 'vite';
 
-const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));
+const projectRoot = resolve('.');
+const pkg = JSON.parse(readFileSync(resolve(projectRoot, 'package.json'), 'utf8'));
 const packageName = pkg.name.split('/').pop();
-const packageDist = `dist/${packageName}`;
-const bundleDist = `${packageDist}/dist`;
-const globalName = packageName.replace(/(?:^|[-_])(\w)/g, (_, c) => c.toUpperCase());
+const configPath = resolve(projectRoot, 'repo_config.json');
+const rivetConfig = existsSync(configPath)
+  ? JSON.parse(readFileSync(configPath, 'utf8'))
+  : {};
+const jsConfig = rivetConfig.js ?? {};
+const entry = resolve(projectRoot, jsConfig.entry || `src/${packageName}.js`);
+const target = jsConfig.target || 'es2015';
+const packageDist = resolve(projectRoot, 'dist', packageName);
+const bundleDist = resolve(packageDist, 'dist');
+const globalName =
+  jsConfig.globalName || packageName.replace(/(?:^|[-_])(\w)/g, (_, character) => character.toUpperCase());
+const banner = `/*! ${packageName} v${pkg.version} | ${pkg.homepage || ''} | ${pkg.license || ''} */`;
 
-const banner = `/*! ${packageName} v${pkg.version} | ${pkg.homepage} | ${pkg.license} */`;
+const outputs = [
+  ['umd', `${packageName}.js`, false],
+  ['umd', `${packageName}.min.js`, true],
+  ['cjs', `${packageName}.cjs`, false],
+  ['es', `${packageName}.mjs`, false],
+  ['es', `${packageName}.esm.js`, false],
+  ['es', `${packageName}.esm.min.js`, true],
+].map(([format, entryFileNames, minified]) => ({
+  format,
+  ...(format === 'umd' ? { name: globalName } : {}),
+  exports: 'named',
+  dir: bundleDist,
+  entryFileNames,
+  banner: minified ? undefined : banner,
+  plugins: minified ? [terser({ format: { comments: /^!/ }, compress: true, mangle: true })] : [],
+}));
 
-/**
- * Creates the Vite plugin that stages generated bundles and documentation assets.
- * @returns {{name: string, closeBundle: () => void}} Vite staging plugin.
- */
-function stageWebUtilityAssets() {
-  return {
-    name: 'stage-web-utility-assets',
-    closeBundle() {
-      const destination = resolve('docs/static/webutil/libs');
-      rmSync(destination, { recursive: true, force: true });
-      mkdirSync(destination, { recursive: true });
-      if (existsSync(resolve(bundleDist))) {
-        cpSync(resolve(bundleDist), destination, { recursive: true });
-      }
-      const brandingDestination = resolve('docs/static/webutil/assets/branding');
-      mkdirSync(brandingDestination, { recursive: true });
-      if (existsSync(resolve(`branding/${packageName}-logo.svg`))) {
-        cpSync(
-          resolve(`branding/${packageName}-logo.svg`),
-          resolve(brandingDestination, `${packageName}-logo.svg`)
-        );
-      }
-      const docsData = resolve('docs/data');
-      mkdirSync(docsData, { recursive: true });
-      cpSync(resolve('package.json'), resolve(docsData, 'package.json'));
-    },
-  };
+function copyWhenPresent(source, destination) {
+  if (!existsSync(source)) return;
+  mkdirSync(dirname(destination), { recursive: true });
+  cpSync(source, destination, { recursive: true });
+}
+
+const stagePackage = {
+  name: 'stage-package',
+  closeBundle() {
+    mkdirSync(packageDist, { recursive: true });
+    const packageDocument = structuredClone(pkg);
+    delete packageDocument.scripts;
+    delete packageDocument.devDependencies;
+    delete packageDocument.files;
+    writeFileSync(resolve(packageDist, 'package.json'), `${JSON.stringify(packageDocument, null, 2)}\n`);
+
+    copyWhenPresent(resolve(projectRoot, 'src'), resolve(packageDist, 'src'));
+    copyWhenPresent(resolve(projectRoot, 'LICENSE'), resolve(packageDist, 'LICENSE'));
+    copyWhenPresent(resolve(projectRoot, 'jsr.jsonc'), resolve(packageDist, 'jsr.jsonc'));
+    copyWhenPresent(resolve(projectRoot, 'branding'), resolve(packageDist, 'branding'));
+    const readme = existsSync(resolve(projectRoot, 'README-npm.md')) ? 'README-npm.md' : 'README.md';
+    copyWhenPresent(resolve(projectRoot, readme), resolve(packageDist, 'README.md'));
+  },
+};
+
+if (!existsSync(entry)) {
+  throw new Error(`Configured JavaScript entry file does not exist: ${basename(entry)}`);
 }
 
 export default defineConfig({
   build: {
-    outDir: 'dist',
+    outDir: packageDist,
     emptyOutDir: true,
     copyPublicDir: false,
     sourcemap: true,
-    target: 'es2015',
-    lib: {
-      entry: resolve(`src/${packageName}.js`),
-      name: globalName,
-      fileName: packageName,
-    },
+    target,
+    lib: { entry, name: globalName, fileName: packageName },
     minify: false,
-    rollupOptions: {
-      output: [
-        {
-          format: 'umd',
-          name: globalName,
-          dir: bundleDist,
-          entryFileNames: `${packageName}.js`,
-          exports: 'named',
-          plugins: [terser({ format: { comments: true, preamble: banner } })],
-        },
-        {
-          format: 'umd',
-          name: globalName,
-          dir: bundleDist,
-          entryFileNames: `${packageName}.min.js`,
-          exports: 'named',
-          plugins: [terser({ format: { comments: /^!/ }, compress: true, mangle: true })],
-        },
-        {
-          format: 'umd',
-          name: globalName,
-          dir: bundleDist,
-          entryFileNames: `${packageName}.cjs`,
-          exports: 'named',
-          plugins: [terser({ format: { comments: true, preamble: banner } })],
-        },
-        {
-          format: 'es',
-          dir: bundleDist,
-          entryFileNames: `${packageName}.mjs`,
-          plugins: [terser({ format: { comments: true, preamble: banner } })],
-        },
-        {
-          format: 'es',
-          dir: bundleDist,
-          entryFileNames: `${packageName}.esm.js`,
-          plugins: [terser({ format: { comments: true, preamble: banner } })],
-        },
-        {
-          format: 'es',
-          dir: bundleDist,
-          entryFileNames: `${packageName}.esm.min.js`,
-          plugins: [terser({ format: { comments: /^!/ }, compress: true, mangle: true })],
-        },
-      ],
-    },
+    rollupOptions: { output: outputs },
   },
   test: {
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.js'],
-      exclude: [
-        '**/node_modules/**',
-        'tests/**',
-        `src/${packageName}-metrics.js`,
-        `src/${packageName}-debug.js`,
-      ],
+      exclude: ['**/node_modules/**', 'tests/**'],
     },
   },
-  plugins: [
-    copy({
-      targets: [
-        { src: 'README-npm.md', dest: packageDist, rename: 'README.md' },
-        {
-          src: 'package.json',
-          dest: packageDist,
-          transform: (contents) => {
-            const packageJson = JSON.parse(contents.toString());
-            delete packageJson.scripts;
-            delete packageJson.devDependencies;
-            delete packageJson.files;
-            return JSON.stringify(packageJson, null, 2);
-          },
-        },
-        { src: 'src', dest: packageDist },
-        { src: 'branding', dest: packageDist },
-        { src: 'LICENSE', dest: packageDist },
-        { src: 'jsr.jsonc', dest: packageDist },
-      ],
-      hook: 'writeBundle',
-    }),
-    stageWebUtilityAssets(),
-  ],
+  plugins: [stagePackage],
 });

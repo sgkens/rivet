@@ -24,11 +24,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/{{PROJECT_PATH}}.git"
+    "url": "{{GITLAB_BASE_URI}}/{{PROJECT_PATH}}.git"
   },
-  "homepage": "https://{{NAMESPACE}}.gitlab.io/{{PROJECT_NAME}}",
+  "homepage": "{{PROJECT_URL}}",
   "bugs": {
-    "url": "https://gitlab.com/{{PROJECT_PATH}}/-/issues"
+    "url": "{{GITLAB_BASE_URI}}/{{PROJECT_PATH}}/-/issues"
   },
   "dependencies": {
     "@11ty/eleventy": "^3.0.0"

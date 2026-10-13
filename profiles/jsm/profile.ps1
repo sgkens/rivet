@@ -1,7 +1,27 @@
 # Profile handlers run inside Rivet's module scope; only this selected file is loaded.
 @{
     TemplateRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($PSScriptRoot, '..', '..', 'templates', 'js'))
-    ValidateConfig = { param($Config) }
+    ValidateConfig = {
+        param($Config)
+        if ($Config.PSObject.Properties['js']) {
+            $js = $Config.js
+            if ($js.PSObject.Properties['entry']) {
+                $entry = [string]$js.entry
+                if ([string]::IsNullOrWhiteSpace($entry) -or [System.IO.Path]::IsPathRooted($entry) -or $entry -match '(^|[/\\])\.\.([/\\]|$)') {
+                    throw 'js.entry must be a repository-relative path inside the repository.'
+                }
+            }
+            if ($js.PSObject.Properties['bundleSize'] -and $js.bundleSize.PSObject.Properties['maxGzipBytes'] -and [long]$js.bundleSize.maxGzipBytes -lt 0) {
+                throw 'js.bundleSize.maxGzipBytes cannot be negative.'
+            }
+        }
+        if ($Config.PSObject.Properties['releaseValidation']) {
+            $validation = $Config.releaseValidation
+            if ($validation.PSObject.Properties['minimumArchiveCount'] -and [int]$validation.minimumArchiveCount -lt 0) {
+                throw 'releaseValidation.minimumArchiveCount cannot be negative.'
+            }
+        }
+    }
     Identity = {
         param($RepositoryRoot, $ProjectName, $Namespace, $Manifest)
         if ($Manifest) { throw '-Manifest is not used by the jsm profile.' }
@@ -29,15 +49,14 @@
         $templateFiles.Add(@{ File = 'repo_meta.json'; Template = 'repo_meta.json.template'; TokenReplace = $true; Mandatory = $true; RivetManaged = $true })
         $templateFiles.Add(@{ File = 'package.json'; Template = 'package.json'; TokenReplace = $true; Mandatory = $false; RivetManaged = $false })
         $templateFiles.Add(@{ File = 'jsr.jsonc'; Template = 'jsr.jsonc'; TokenReplace = $true; Mandatory = $false; RivetManaged = $false })
+        $templateFiles.Add(@{ File = 'src/{{PROJECT_NAME}}.js'; Template = 'src/library.js.template'; TokenReplace = $true; Mandatory = $false; RivetManaged = $false })
 
         $includeBun = $Bun -or [System.IO.File]::Exists([System.IO.Path]::Combine($RepositoryRoot, 'bunfig.toml')) -or [System.IO.File]::Exists([System.IO.Path]::Combine($RepositoryRoot, 'bun.lock'))
         if ($includeBun) {
             $templateFiles.Add(@{ File = 'bunfig.toml'; Template = 'bunfig.toml'; TokenReplace = $false; Mandatory = $false; RivetManaged = $false })
-            $templateFiles.Add(@{ File = 'bun.lock'; Template = 'bun.lock'; TokenReplace = $true; Mandatory = $false; RivetManaged = $false })
         }
 
         $templateFiles.Add(@{ File = 'vite.config.js'; Template = 'vite.config.js'; TokenReplace = $true; Mandatory = $false; RivetManaged = $false })
-        $templateFiles.Add(@{ File = 'vite.optional.config.js'; Template = 'vite.optional.config.js'; TokenReplace = $true; Mandatory = $false; RivetManaged = $false })
         $templateFiles.Add(@{ File = 'eslint.config.js'; Template = 'eslint.config.js'; TokenReplace = $false; Mandatory = $false; RivetManaged = $false })
         $templateFiles.Add(@{ File = '.prettierrc'; Template = '.prettierrc'; TokenReplace = $false; Mandatory = $false; RivetManaged = $false })
         $templateFiles.Add(@{ File = '.gitignore'; Template = '.gitignore'; TokenReplace = $false; Mandatory = $false; RivetManaged = $false })
@@ -76,8 +95,9 @@
             Add-Check 'Node.js runtime' $false 'node not found in PATH' $false
         }
 
-        foreach ($name in @('package.json', 'jsr.jsonc')) {
-            Add-Check $name ([System.IO.File]::Exists([System.IO.Path]::Combine($RepositoryRoot, $name))) 'required repository file'
+        Add-Check 'package.json' ([System.IO.File]::Exists([System.IO.Path]::Combine($RepositoryRoot, 'package.json'))) 'required repository file'
+        if ([System.IO.File]::Exists([System.IO.Path]::Combine($RepositoryRoot, 'jsr.jsonc'))) {
+            Add-Check 'jsr.jsonc' $true 'optional JSR manifest'
         }
 
         $pkgPath = [System.IO.Path]::Combine($RepositoryRoot, 'package.json')
@@ -103,7 +123,7 @@
     }
     ReleaseChecklist = {
         param($Version)
-        "- [ ] Update npm ``package.json`` and JSR ``jsr.jsonc`` package versions to ``$Version``."
+        "- [ ] Update configured JavaScript package manifests to ``$Version``."
     }
     ReviewVersions = {
         param($RepositoryRoot, $Config)

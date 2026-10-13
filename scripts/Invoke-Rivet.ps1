@@ -311,7 +311,7 @@ function Invoke-Rivet {
   ╲▓▓▓▓▓╱   ██ ██   ██   ██ ██  ██        ██
    └─┼─┘    ██  ██ ████   ███   ██████   ██
      |      |    |  ||     ||    |  |    ||
-     |      StaticCanvas repository command center
+     |      Rivet repository command center
      |      Local by default; remote sync is opt-in
 '@
 
@@ -332,7 +332,7 @@ function Invoke-Rivet {
 
     if (-not $Raw) {
         $bannerTokens = ConvertTo-AsciiTokens -Lines ($asciiBanner -split '\r?\n') -Connectivity 8
-        foreach ($line in @(ConvertTo-GradientAsciiLines -TokenObject $bannerTokens -Mode Horizontal -StartColor @(0, 180, 255) -EndColor @(255, 60, 180))) {
+        foreach ($line in @(ConvertTo-GradientAsciiLines -TokenObject $bannerTokens -Mode Horizontal -StartColor @(255, 130, 0) -EndColor @(0, 120, 255))) {
             [Console]::WriteLine($line)
         }
         [Console]::WriteLine('')

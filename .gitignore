@@ -1,1 +1,4 @@
-issues/
+issues/*
+!issues/bugs/
+issues/bugs/*
+!issues/bugs/*.md

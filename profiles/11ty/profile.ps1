@@ -112,10 +112,8 @@
 
         $headerTemplatePath = [System.IO.Path]::Combine($PSScriptRoot, '..', '..', 'templates', '11ty', 'README.header.md.template')
         if ([System.IO.File]::Exists($headerTemplatePath)) {
-            try {
-                Update-JSHeader -RepositoryRoot $RepositoryRoot -ConfigPath $ConfigPath -TemplatePath $headerTemplatePath -DryRun:$DryRun
-                return
-            } catch { }
+            Update-JSHeader -RepositoryRoot $RepositoryRoot -ConfigPath $ConfigPath -TemplatePath $headerTemplatePath -DryRun:$DryRun
+            return
         }
         $version = try {
             $pkgDoc = [System.Text.Json.JsonDocument]::Parse([System.IO.File]::ReadAllText([System.IO.Path]::Combine($RepositoryRoot, 'package.json')))

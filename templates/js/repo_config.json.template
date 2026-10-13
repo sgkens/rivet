@@ -10,7 +10,7 @@
     "npmPackage": "{{PACKAGE_NAME}}",
     "jsrPackage": "{{PACKAGE_NAME}}",
     "bannerUrl": "https://example.invalid/{{PROJECT_NAME}}-banner.svg",
-    "documentationUrl": "https://{{NAMESPACE}}.gitlab.io/{{PROJECT_NAME}}"
+    "documentationUrl": "{{PROJECT_URL}}"
   },
   "readmeHeader": {
     "alignment": "left",
@@ -20,6 +20,18 @@
     "logoColor": "#ffffff",
     "codecovToken": ""
   },
+  "js": {
+    "entry": "src/{{PROJECT_NAME}}.js",
+    "target": "es2015",
+    "globalName": "",
+    "bundleSize": { "maxGzipBytes": 0 }
+  },
+  "releaseValidation": {
+    "minimumArchiveCount": 0,
+    "requiredFiles": [],
+    "textFiles": []
+  },
+  "scaffold": { "exclude": [], "templates": [] },
   "readme": {
     "requiredHeadings": [
       { "level": 2, "name": "Features" },
@@ -59,7 +71,7 @@
   "authors": { "mappings": [] },
   "tagging": { "prefix": "v", "releaseSuffix": "-release", "remote": "origin" },
   "gitlab": {
-    "baseUri": "https://gitlab.com",
+    "baseUri": "{{GITLAB_BASE_URI}}",
     "projectId": "",
     "tokenEnvironmentVariable": "GITLAB_API_KEY"
   },

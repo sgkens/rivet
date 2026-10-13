@@ -17,7 +17,7 @@ function Initialize-RivetRepository {
     .PARAMETER TemplateRoot
         Path to the template files directory.
     .PARAMETER Bun
-        Includes Bun runtime files (bunfig.toml and bun.lock).
+        Includes the Bun runtime configuration. The package manager creates its lockfile.
     .PARAMETER DryRun
         Reports actions without writing files.
     .PARAMETER Raw
@@ -44,18 +44,29 @@ function Initialize-RivetRepository {
     }
     if ([string]::IsNullOrWhiteSpace($TemplateRoot)) { $TemplateRoot = $repositoryProfile.TemplateRoot }
     $projectName = (Split-Path $repositoryPath -Leaf)
-    $namespace = 'staticcanvas'
+    $namespace = 'local'
+    $projectPath = "$namespace/$projectName"
+    $gitLabBaseUri = 'https://gitlab.com'
+    if ($null -ne $existingConfig -and $existingConfig.PSObject.Properties['gitlab'] -and $existingConfig.gitlab.PSObject.Properties['baseUri']) {
+        $gitLabBaseUri = ([string]$existingConfig.gitlab.baseUri).TrimEnd('/')
+    }
 
     $remoteUrl = (& git -C $repositoryPath remote get-url origin 2>$null)
-    if ($LASTEXITCODE -eq 0 -and $remoteUrl -match '(?i)gitlab\.com[:/](?<path>[^\s]+?)(?:\.git)?$') {
-        $projectPath = $Matches.path -replace '\.git$', ''
+    $remotePath = $null
+    if ($LASTEXITCODE -eq 0 -and $remoteUrl -match '(?i)^(?<base>https?://[^/\s]+)/(?<path>[^\s]+?)(?:\.git)?$') {
+        $remotePath = $Matches.path
+        if ($null -eq $existingConfig) { $gitLabBaseUri = $Matches.base.TrimEnd('/') }
+    } elseif ($LASTEXITCODE -eq 0 -and $remoteUrl -match '(?i)^(?:ssh://)?[^@\s]+@(?<host>[^:/\s]+)(?::|/)(?<path>[^\s]+?)(?:\.git)?$') {
+        $remotePath = $Matches.path
+        if ($null -eq $existingConfig) { $gitLabBaseUri = "https://$($Matches.host)" }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($remotePath)) {
+        $projectPath = $remotePath.Trim('/') -replace '\.git$', ''
         $pathParts = $projectPath -split '/'
         if ($pathParts.Count -gt 1) {
             $namespace = $pathParts[0]
-            $projectName = $pathParts[1]
+            $projectName = $pathParts[-1]
         }
-    } else {
-        $projectPath = "$namespace/$projectName"
     }
 
     if ($null -ne $existingConfig -and $existingConfig.PSObject.Properties[$repositoryProfile.Name]) {
@@ -70,6 +81,14 @@ function Initialize-RivetRepository {
     $identity = & $repositoryProfile.Identity $repositoryPath $projectName $namespace $Manifest
     $projectName = $identity.ProjectName
     $namespace = $identity.Namespace
+    if ([string]::IsNullOrWhiteSpace($remotePath) -and $null -eq $existingConfig) {
+        $projectPath = "$namespace/$projectName"
+    }
+    if ($null -ne $existingConfig -and $existingConfig.PSObject.Properties['project']) {
+        if ($existingConfig.project.PSObject.Properties['name'] -and -not [string]::IsNullOrWhiteSpace([string]$existingConfig.project.name)) { $projectName = [string]$existingConfig.project.name }
+        if ($existingConfig.project.PSObject.Properties['namespace'] -and -not [string]::IsNullOrWhiteSpace([string]$existingConfig.project.namespace)) { $namespace = [string]$existingConfig.project.namespace }
+        if ($existingConfig.project.PSObject.Properties['path'] -and -not [string]::IsNullOrWhiteSpace([string]$existingConfig.project.path)) { $projectPath = [string]$existingConfig.project.path }
+    }
     $branch = (& git -C $repositoryPath branch --show-current 2>$null)
     if ([string]::IsNullOrWhiteSpace($branch)) { $branch = 'main' }
     $displayName = [System.Globalization.CultureInfo]::InvariantCulture.TextInfo.ToTitleCase(($projectName -replace '[-_]+', ' '))
@@ -80,10 +99,50 @@ function Initialize-RivetRepository {
         '{{PROJECT_PATH}}' = $projectPath
         '{{DEFAULT_BRANCH}}' = $branch.Trim()
         '{{PROFILE}}' = $repositoryProfile.Name
+        '{{GITLAB_BASE_URI}}' = $gitLabBaseUri
+        '{{PROJECT_URL}}' = "$gitLabBaseUri/$projectPath"
     }
 
     foreach ($key in $identity.Tokens.Keys) { $tokens[$key] = [string]$identity.Tokens[$key] }
-    $templateFiles = @(& $repositoryProfile.Templates $repositoryPath $tokens ([bool]$Bun))
+    $templateFiles = [System.Collections.Generic.List[hashtable]]::new()
+    foreach ($profileTemplate in @(& $repositoryProfile.Templates $repositoryPath $tokens ([bool]$Bun))) {
+        $templateFiles.Add($profileTemplate)
+    }
+
+    if ($null -ne $existingConfig -and $existingConfig.PSObject.Properties['scaffold']) {
+        $scaffold = $existingConfig.scaffold
+        $excludedFiles = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $configuredExclusions = if ($scaffold.PSObject.Properties['exclude']) { @($scaffold.exclude) } else { @() }
+        foreach ($excludedFile in $configuredExclusions) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$excludedFile)) { [void]$excludedFiles.Add(([string]$excludedFile).Replace('\', '/')) }
+        }
+        if ($excludedFiles.Count) {
+            for ($index = $templateFiles.Count - 1; $index -ge 0; $index--) {
+                if ($excludedFiles.Contains(([string]$templateFiles[$index].File).Replace('\', '/'))) {
+                    $templateFiles.RemoveAt($index)
+                }
+            }
+        }
+
+        $configuredTemplates = if ($scaffold.PSObject.Properties['templates']) { @($scaffold.templates) } else { @() }
+        foreach ($customTemplate in $configuredTemplates) {
+            $destinationName = [string]$customTemplate.file
+            $sourceName = [string]$customTemplate.template
+            foreach ($candidate in @($destinationName, $sourceName)) {
+                if ([string]::IsNullOrWhiteSpace($candidate) -or [System.IO.Path]::IsPathRooted($candidate) -or $candidate -match '(^|[/\\])\.\.([/\\]|$)') {
+                    throw 'scaffold template file and template paths must be repository-relative paths inside the repository.'
+                }
+            }
+            $templateFiles.Add(@{
+                File = $destinationName
+                Template = $sourceName
+                TemplateRoot = $repositoryPath
+                TokenReplace = -not ($customTemplate.PSObject.Properties['tokenReplace'] -and -not [bool]$customTemplate.tokenReplace)
+                Mandatory = -not ($customTemplate.PSObject.Properties['mandatory'] -and -not [bool]$customTemplate.mandatory)
+                RivetManaged = $false
+            })
+        }
+    }
 
     $results = [System.Collections.Generic.List[object]]::new($templateFiles.Count)
     foreach ($entry in $templateFiles) {
@@ -95,7 +154,8 @@ function Initialize-RivetRepository {
             [System.IO.Path]::Combine($repositoryPath, ($fileName -replace '/', [System.IO.Path]::DirectorySeparatorChar))
         }
 
-        $template = [System.IO.Path]::Combine($TemplateRoot, ($entry.Template -replace '/', [System.IO.Path]::DirectorySeparatorChar))
+        $entryTemplateRoot = if ($entry.ContainsKey('TemplateRoot')) { [string]$entry.TemplateRoot } else { $TemplateRoot }
+        $template = [System.IO.Path]::Combine($entryTemplateRoot, ($entry.Template -replace '/', [System.IO.Path]::DirectorySeparatorChar))
         if (-not [System.IO.File]::Exists($template)) {
             if ($entry.Mandatory) { throw "rivet template not found: $template" }
             continue
