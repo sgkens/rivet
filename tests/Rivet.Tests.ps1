@@ -243,7 +243,7 @@ Describe 'Update-JSHeader README variants' {
         $repo = Join-Path $TestDrive 'header-repo'
         New-TestRepository -Root $repo -Version '1.0.0'
         [System.IO.File]::WriteAllText((Join-Path $repo 'package.json'), '{"name":"@group/fixture","version":"1.2.3"}')
-        [System.IO.File]::WriteAllText((Join-Path $repo 'repo_meta.json'), '{"project":{"description":"Fixture is a test package."}}')
+        [System.IO.File]::WriteAllText((Join-Path $repo 'repo_meta.json'), '{"project":{"description":"A reusable test package."}}')
         $configDocument = [ordered]@{
             project = [ordered]@{
                 name = 'fixture'; displayName = 'Fixture'; path = 'group/fixture'; artifactPath = 'group/fixture'
@@ -272,7 +272,14 @@ Describe 'Update-JSHeader README variants' {
         $main | Should -Match 'MAIN BODY'
         $npm | Should -Match 'NPM BODY'
         $npm | Should -Match '# \*\*@group/fixture\*\*'
-        $npm | Should -Match "test package\.`n`n---"
+        $main | Should -Match '> A reusable test package\.'
+        $npm | Should -Match "A reusable test package\.`n`n---"
+
+        $eleventyTemplate = Join-Path $script:RivetRoot 'templates/11ty/README.header.md.template'
+        Update-JSHeader -RepositoryRoot $repo -TemplatePath $eleventyTemplate
+        $eleventy = [System.IO.File]::ReadAllText((Join-Path $repo 'README.md'))
+        $eleventy | Should -Match '> A reusable test package\.'
+        $eleventy | Should -Not -Match '\{\{DESCRIPTION_SUFFIX\}\}'
     }
 }
 

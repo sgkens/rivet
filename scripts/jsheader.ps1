@@ -94,10 +94,6 @@ function Update-JSHeader {
         $config.Dispose()
     }
 
-    if (-not $description.StartsWith("$name is ", [System.StringComparison]::Ordinal)) {
-        throw "repo_meta.json project.description must begin with '$name is '."
-    }
-
     $tagLines = & git -C $repositoryPath tag --merged HEAD --list 'v[0-9]*' --sort=-version:refname
     if ($LASTEXITCODE -ne 0) { throw "Unable to read Git tags from '$repositoryPath'." }
     $latestTag = $tagLines | Where-Object { $_ -match '^v\d+\.\d+\.\d+(?:-release)?$' } | Select-Object -First 1
@@ -120,8 +116,6 @@ function Update-JSHeader {
     $packageBadgeQuery = "style=$badgeStyle&logo=npm&labelColor=%23$labelColor&color=%23$badgeColor&logoColor=%23$logoColor"
     $jsrBadgeQuery = "style=$badgeStyle&logo=jsr&labelColor=%23$labelColor&color=%23$badgeColor&logoColor=%23$logoColor"
     $jsdelivrBadgeQuery = "style=$badgeStyle&logo=jsdelivr&labelColor=%23$labelColor&color=%23$badgeColor&logoColor=%23$logoColor"
-    $descriptionSuffix = $description.Substring($name.Length)
-
     if ([string]::IsNullOrWhiteSpace($TemplatePath)) {
         $TemplatePath = [System.IO.Path]::Combine($PSScriptRoot, '..', 'templates', 'js', 'README.header.md.template')
     }
@@ -150,7 +144,7 @@ function Update-JSHeader {
         '{{JSDELIVR_BADGE_QUERY}}' = $jsdelivrBadgeQuery
         '{{ENCODED_ARTIFACT_PATH}}' = $encodedProjectPath
         '{{DEFAULT_BRANCH}}' = $defaultBranch
-        '{{DESCRIPTION_SUFFIX}}' = $descriptionSuffix
+        '{{DESCRIPTION}}' = $description
     }
     foreach ($entry in $replacements.GetEnumerator()) { $generatedHeader = $generatedHeader.Replace($entry.Key, [string]$entry.Value) }
     if ($generatedHeader -match '\{\{[A-Z0-9_]+\}\}') { throw "README header template contains unresolved token '$($Matches[0])'." }
