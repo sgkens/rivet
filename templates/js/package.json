@@ -13,36 +13,22 @@
       "require": "./dist/{{PROJECT_NAME}}.cjs",
       "default": "./dist/{{PROJECT_NAME}}.js"
     },
-    "./metrics": {
-      "import": "./dist/{{PROJECT_NAME}}-metrics.mjs",
-      "require": "./dist/{{PROJECT_NAME}}-metrics.cjs",
-      "default": "./dist/{{PROJECT_NAME}}-metrics.js"
-    },
-    "./debug": {
-      "import": "./dist/{{PROJECT_NAME}}-debug.mjs",
-      "require": "./dist/{{PROJECT_NAME}}-debug.cjs",
-      "default": "./dist/{{PROJECT_NAME}}-debug.js"
-    },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
     "src",
-    "branding",
     "README.md",
     "LICENSE",
     "jsr.jsonc"
   ],
   "scripts": {
     "dev": "vite",
-    "serve:demo": "vite --open docs/static/webutil/index.html",
-    "docs:build": "npm run build && hugo --source docs",
-    "docs:serve": "npm run build && hugo server --source docs --buildDrafts --disableFastRender --ignoreCache --noHTTPCache --gc",
-    "build": "vite build && npm_config_mode=metrics vite build --config vite.optional.config.js && npm_config_mode=debug vite build --config vite.optional.config.js",
+    "build": "vite build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest run --coverage",
     "test:bun": "bun test",
     "test:coverage:bun": "bun test --coverage",
@@ -51,26 +37,18 @@
     "check:quality": "npm run build && npm run check:size && npm test"
   },
   "keywords": [
-    "staticcanvas",
+    "javascript",
     "esm"
   ],
-  "author": "Garvey K. Snow",
+  "author": "",
   "license": "MIT",
-  "peerDependencies": {
-    "@staticcanvas/logcad": "^0.6.0"
-  },
-  "peerDependenciesMeta": {
-    "@staticcanvas/logcad": {
-      "optional": true
-    }
-  },
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/{{PROJECT_PATH}}.git"
+    "url": "{{GITLAB_BASE_URI}}/{{PROJECT_PATH}}.git"
   },
-  "homepage": "https://{{NAMESPACE}}.gitlab.io/{{PROJECT_NAME}}",
+  "homepage": "{{PROJECT_URL}}",
   "bugs": {
-    "url": "https://gitlab.com/{{PROJECT_PATH}}/-/issues"
+    "url": "{{GITLAB_BASE_URI}}/{{PROJECT_PATH}}/-/issues"
   },
   "devDependencies": {
     "@eslint/js": "^9.20.0",
@@ -81,7 +59,6 @@
     "globals": "^15.14.0",
     "jsdom": "^26.0.0",
     "prettier": "^3.5.0",
-    "rollup-plugin-copy": "^3.5.0",
     "vite": "^6.1.0",
     "vitest": "^3.0.5"
   }

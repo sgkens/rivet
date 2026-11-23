@@ -1,0 +1,37 @@
+{
+  "name": "{{PACKAGE_NAME}}",
+  "version": "0.1.0",
+  "description": "{{DISPLAY_NAME}} Eleventy theme.",
+  "type": "module",
+  "main": "eleventy.config.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "eleventy --serve",
+    "build": "eleventy",
+    "test": "node --test tests/*.test.js",
+    "check": "node scripts/check.js"
+  },
+  "keywords": [
+    "eleventy",
+    "eleventy-theme",
+    "11ty",
+    "theme",
+    "nunjucks"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "{{GITLAB_BASE_URI}}/{{PROJECT_PATH}}.git"
+  },
+  "homepage": "{{PROJECT_URL}}",
+  "bugs": {
+    "url": "{{GITLAB_BASE_URI}}/{{PROJECT_PATH}}/-/issues"
+  },
+  "dependencies": {
+    "@11ty/eleventy": "^3.0.0"
+  },
+  "devDependencies": {}
+}

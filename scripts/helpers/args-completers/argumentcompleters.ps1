@@ -501,5 +501,20 @@ function Register-RivetArgumentCompleters {
             param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
             [RivetBranchCompleter]::new().CompleteArgument($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
         } -ErrorAction SilentlyContinue
+
+        Register-ArgumentCompleter -CommandName $cmd -ParameterName 'Profile' -ScriptBlock {
+            param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+            $profilesRoot = [System.IO.Path]::Combine($PSScriptRoot, '..', '..', 'profiles')
+            $results = [System.Collections.Generic.List[System.Management.Automation.CompletionResult]]::new()
+            if ([System.IO.Directory]::Exists($profilesRoot)) {
+                foreach ($dir in [System.IO.Directory]::GetDirectories($profilesRoot)) {
+                    $name = [System.IO.Path]::GetFileName($dir)
+                    if ($name -like "$wordToComplete*" -and [System.IO.File]::Exists([System.IO.Path]::Combine($dir, 'profile.ps1'))) {
+                        $results.Add([System.Management.Automation.CompletionResult]::new($name, $name, [System.Management.Automation.CompletionResultType]::ParameterValue, "Repository profile $name"))
+                    }
+                }
+            }
+            return $results
+        } -ErrorAction SilentlyContinue
     }
 }

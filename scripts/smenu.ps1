@@ -170,14 +170,7 @@ function Show-SMenu {
 
     function Format-MultiActionTitle([string]$Text) {
         if ([string]::IsNullOrEmpty($Text)) { return '' }
-        $midpoint = [Math]::Max(1, [Math]::Ceiling($Text.Length / 2.0))
-        $first = $Text.Substring(0, $midpoint)
-        $second = if ($midpoint -lt $Text.Length) { $Text.Substring($midpoint) } else { '' }
-        $cyan = @(0, 210, 255)
-        $violet = @(196, 112, 255)
-        $magenta = @(255, 70, 180)
-        return (Format-GradientString -Text $first -Start $cyan -End $violet) +
-            (Format-GradientString -Text $second -Start $violet -End $magenta)
+        return Format-GradientString -Text $Text -Start @(255, 130, 0) -End @(0, 120, 255)
     }
 
     function Format-ItemTitle([object]$Item) {

@@ -1,0 +1,29 @@
+image: node:22-alpine
+
+stages:
+  - test
+  - build
+  - deploy
+
+cache:
+  paths:
+    - node_modules/
+
+before_script:
+  - npm ci
+
+lint-and-test:
+  stage: test
+  script:
+    - npm test
+
+pages:
+  stage: deploy
+  script:
+    - npm run build
+    - mv _site public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

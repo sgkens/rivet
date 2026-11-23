@@ -1,8 +1,8 @@
 function Update-JSLibSemver {
     <#
     .SYNOPSIS
-        Synchronizes package.json, jsr.jsonc, and the root package-lock.json
-        package identity to one SemVer version.
+        Synchronizes package.json, an optional jsr.jsonc, and the root
+        package-lock.json package identity to one SemVer version.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -21,7 +21,10 @@ function Update-JSLibSemver {
 
     foreach ($relativePath in @('package.json', 'jsr.jsonc')) {
         $path = [System.IO.Path]::Combine($repositoryPath, $relativePath)
-        if (-not [System.IO.File]::Exists($path)) { throw "Required version file not found: $path" }
+        if (-not [System.IO.File]::Exists($path)) {
+            if ($relativePath -eq 'package.json') { throw "Required version file not found: $path" }
+            continue
+        }
         $content = [System.IO.File]::ReadAllText($path)
         $pattern = if ($relativePath -eq 'package.json') {
             '(?s)^(\s*\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"version"\s*:\s*)"[^"]+"'

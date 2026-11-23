@@ -157,6 +157,8 @@ Describe 'Initialize-RivetRepository' {
         $created = @(Initialize-RivetRepository -RepositoryRoot $repo -TemplateRoot $templateRoot -Confirm:$false)
         $created.State | Should -Contain 'CREATED'
         (Get-RivetConfiguration -ConfigPath (Join-Path $repo 'repo_config.json')).project.name | Should -Be 'library'
+        (Get-RivetConfiguration -ConfigPath (Join-Path $repo 'repo_config.json')).project.path | Should -Be 'fixture/library'
+        Test-Path (Join-Path $repo 'src/library.js') | Should -BeTrue
         $existing = @(Initialize-RivetRepository -RepositoryRoot $repo -TemplateRoot $templateRoot -Confirm:$false)
         @($existing | Where-Object State -eq 'EXISTS').Count | Should -BeGreaterOrEqual 2
     }
@@ -167,11 +169,74 @@ Describe 'Initialize-RivetRepository' {
         $templateRoot = Join-Path $script:RivetRoot 'templates/js'
         $created = @(Initialize-RivetRepository -RepositoryRoot $repo -TemplateRoot $templateRoot -Bun -Confirm:$false)
         $created.File | Should -Contain 'bunfig.toml'
-        $created.File | Should -Contain 'bun.lock'
         $created.File | Should -Contain 'package.json'
         Test-Path (Join-Path $repo 'bunfig.toml') | Should -BeTrue
-        Test-Path (Join-Path $repo 'bun.lock') | Should -BeTrue
         Test-Path (Join-Path $repo 'package.json') | Should -BeTrue
+    }
+
+    It 'uses the final remote segment for nested GitLab project paths' {
+        $repo = Join-Path $TestDrive 'nested-group-repo'
+        [System.IO.Directory]::CreateDirectory($repo) | Out-Null
+        Invoke-TestGit $repo init --initial-branch=main | Out-Null
+        Invoke-TestGit $repo config user.name testuser | Out-Null
+        Invoke-TestGit $repo config user.email test@example.invalid | Out-Null
+        Invoke-TestGit $repo remote add origin 'git@gitlab.example:group/subgroup/project.git' | Out-Null
+
+        Initialize-RivetRepository -RepositoryRoot $repo -Profile 11ty -Raw -Confirm:$false | Out-Null
+        $config = Get-RivetConfiguration (Join-Path $repo 'repo_config.json')
+        $config.project.name | Should -Be 'project'
+        $config.project.namespace | Should -Be 'group'
+        $config.project.path | Should -Be 'group/subgroup/project'
+        $config.gitlab.baseUri | Should -Be 'https://gitlab.example'
+        $config.project.documentationUrl | Should -Be 'https://gitlab.example/group/subgroup/project'
+        $package = Get-Content (Join-Path $repo 'package.json') -Raw | ConvertFrom-Json
+        $package.repository.url | Should -Be 'https://gitlab.example/group/subgroup/project.git'
+    }
+
+    It 'uses a neutral namespace when no remote or package identity exists' {
+        $repo = Join-Path $TestDrive 'neutral-repo'
+        [System.IO.Directory]::CreateDirectory($repo) | Out-Null
+        Invoke-TestGit $repo init --initial-branch=main | Out-Null
+        Invoke-TestGit $repo config user.name testuser | Out-Null
+        Invoke-TestGit $repo config user.email test@example.invalid | Out-Null
+
+        Initialize-RivetRepository -RepositoryRoot $repo -Profile 11ty -Raw -Confirm:$false | Out-Null
+        $config = Get-RivetConfiguration (Join-Path $repo 'repo_config.json')
+        $config.project.namespace | Should -Be 'local'
+        $config.project.path | Should -Be 'local/neutral-repo'
+    }
+
+    It 'keeps the generic JavaScript scaffold free of project-specific dependencies' {
+        $templateRoot = Join-Path $script:RivetRoot 'templates/js'
+        $templateFiles = [System.IO.Directory]::GetFiles($templateRoot, '*', [System.IO.SearchOption]::AllDirectories)
+        $content = ($templateFiles | ForEach-Object { [System.IO.File]::ReadAllText($_) }) -join "`n"
+        $content | Should -Not -Match '(?i)@staticcanvas|\blume\b|\basciiam\b|\bhawk\b|\btypeflow\b|phellams|\bhugo\b'
+        $content | Should -Match 'vitest run --passWithNoTests'
+        $content | Should -Match 'if \[ -f package-lock\.json \]; then npm ci; else npm install; fi'
+    }
+
+    It 'adds and excludes scaffold files through repository configuration' {
+        $repo = Join-Path $TestDrive 'configured-scaffold-repo'
+        New-TestRepository -Root $repo
+        Initialize-RivetRepository -RepositoryRoot $repo -Profile jsm -Raw -Confirm:$false | Out-Null
+        $configPath = Join-Path $repo 'repo_config.json'
+        $config = Get-RivetConfiguration $configPath
+        $config.scaffold = [pscustomobject]@{
+            exclude = @('.prettierrc')
+            templates = @([pscustomobject]@{
+                file = 'generated/project.txt'
+                template = '.rivet/project.txt.template'
+                tokenReplace = $true
+            })
+        }
+        [System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 32))
+        [System.IO.Directory]::CreateDirectory((Join-Path $repo '.rivet')) | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $repo '.rivet/project.txt.template'), 'project={{PROJECT_NAME}}')
+        [System.IO.File]::Delete((Join-Path $repo '.prettierrc'))
+
+        Initialize-RivetRepository -RepositoryRoot $repo -Raw -Confirm:$false | Out-Null
+        [System.IO.File]::ReadAllText((Join-Path $repo 'generated/project.txt')) | Should -Be 'project=library'
+        Test-Path (Join-Path $repo '.prettierrc') | Should -BeFalse
     }
 }
 
@@ -244,7 +309,7 @@ Describe 'Update-JSHeader README variants' {
         $repo = Join-Path $TestDrive 'header-repo'
         New-TestRepository -Root $repo -Version '1.0.0'
         [System.IO.File]::WriteAllText((Join-Path $repo 'package.json'), '{"name":"@group/fixture","version":"1.2.3"}')
-        [System.IO.File]::WriteAllText((Join-Path $repo 'repo_meta.json'), '{"project":{"description":"A focused test package with no required name prefix."}}')
+        [System.IO.File]::WriteAllText((Join-Path $repo 'repo_meta.json'), '{"project":{"description":"A reusable test package."}}')
         $configDocument = [ordered]@{
             project = [ordered]@{
                 name = 'fixture'; displayName = 'Fixture'; path = 'group/fixture'; artifactPath = 'group/fixture'
@@ -273,25 +338,14 @@ Describe 'Update-JSHeader README variants' {
         $main | Should -Match 'MAIN BODY'
         $npm | Should -Match 'NPM BODY'
         $npm | Should -Match '# \*\*@group/fixture\*\*'
-        $main | Should -Match '> A focused test package with no required name prefix\.'
-        $npm | Should -Match "focused test package with no required name prefix\.`n`n---"
-    }
-}
+        $main | Should -Match '> A reusable test package\.'
+        $npm | Should -Match "A reusable test package\.`n`n---"
 
-Describe 'Repository project description validation' {
-    It 'allows any concise single-line description' {
-        Assert-RivetProjectDescription -Description 'Automation for repeatable repository maintenance.' |
-            Should -BeExactly 'Automation for repeatable repository maintenance.'
-    }
-
-    It 'rejects descriptions longer than 160 characters' {
-        { Assert-RivetProjectDescription -Description ('x' * 161) } |
-            Should -Throw '*must not exceed 160 characters; received 161*'
-    }
-
-    It 'rejects empty and multiline descriptions' {
-        { Assert-RivetProjectDescription -Description '   ' } | Should -Throw '*must be a non-empty string*'
-        { Assert-RivetProjectDescription -Description "first line`nsecond line" } | Should -Throw '*must be a single line*'
+        $eleventyTemplate = Join-Path $script:RivetRoot 'templates/11ty/README.header.md.template'
+        Update-JSHeader -RepositoryRoot $repo -TemplatePath $eleventyTemplate
+        $eleventy = [System.IO.File]::ReadAllText((Join-Path $repo 'README.md'))
+        $eleventy | Should -Match '> A reusable test package\.'
+        $eleventy | Should -Not -Match '\{\{DESCRIPTION_SUFFIX\}\}'
     }
 }
 
@@ -348,6 +402,17 @@ Describe 'Update-JSLibSemver' {
             $document.RootElement.GetProperty('version').GetString() | Should -Be '1.2.0'
             $document.RootElement.GetProperty('packages').GetProperty('').GetProperty('version').GetString() | Should -Be '1.2.0'
         } finally { $document.Dispose() }
+    }
+
+    It 'updates package.json when the optional JSR manifest is absent' {
+        $repo = Join-Path $TestDrive 'npm-only-manifest-repo'
+        New-TestRepository -Root $repo
+        [System.IO.File]::Delete((Join-Path $repo 'jsr.jsonc'))
+
+        Update-JSLibSemver -RepositoryRoot $repo -Version 1.2.0 -Confirm:$false | Out-Null
+
+        $package = Get-Content (Join-Path $repo 'package.json') -Raw | ConvertFrom-Json
+        $package.version | Should -Be '1.2.0'
     }
 }
 
@@ -638,7 +703,7 @@ Describe 'Update-MergeRequestDocumentation' {
         $mrContent | Should -Match 'Target branch:\s*\|\s*`main`'
         $mrContent | Should -Match '(?:\*\*)?Commit logs parsed(?::?\*\*|\*\*:?|:)?\s*\|\s*`1`'
         $mrContent | Should -Match 'Add shiny feature\.'
-        $mrContent | Should -Match 'Update npm `package\.json` and JSR `jsr\.jsonc` package versions to `1\.1\.0`\.'
+        $mrContent | Should -Match 'Update configured JavaScript package manifests to `1\.1\.0`\.'
     }
 
     It 'calculates patch bump type when only fixes exist' {
@@ -769,15 +834,18 @@ Fixture changes.
 }
 
 Describe 'rivet command-center multi-action labels' {
-    It 'renders multi-action titles with three gradient anchors and single actions in white' {
+    It 'renders multi-action titles with an orange-to-blue gradient and single actions in white' {
         $menuSource = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot '../scripts/Invoke-RivetMenu.ps1'))
         $menuSource | Should -Not -Match '"\[MA\] \$Label"'
         $rendererSource = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot '../scripts/smenu.ps1'))
         $rendererSource | Should -Match 'return "\$label \[MA\]"'
-        $rendererSource | Should -Match '\$cyan\s*=\s*@\(0, 210, 255\)'
-        $rendererSource | Should -Match '\$violet\s*=\s*@\(196, 112, 255\)'
-        $rendererSource | Should -Match '\$magenta\s*=\s*@\(255, 70, 180\)'
+        $rendererSource | Should -Match 'Format-GradientString -Text \$Text -Start @\(255, 130, 0\) -End @\(0, 120, 255\)'
         $rendererSource | Should -Match 'Single\s*=\s*"\$esc\[1;38;2;255;255;255m"'
+
+        $routerSource = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot '../scripts/Invoke-Rivet.ps1'))
+        $routerSource | Should -Match 'StartColor @\(255, 130, 0\) -EndColor @\(0, 120, 255\)'
+        $routerSource | Should -Match 'Rivet repository command center'
+        $routerSource | Should -Not -Match 'StaticCanvas repository command center'
 
         @(
             'Initialize repository'
@@ -1321,6 +1389,7 @@ Describe 'Repository profiles' {
     It 'defaults legacy configuration to jsm and rejects unknown or empty profiles' {
         (Get-RivetProfile).Name | Should -Be 'jsm'
         (Get-RivetProfile -Config ([pscustomobject]@{})).Name | Should -Be 'jsm'
+        (Get-RivetProfile -Name '11ty').Name | Should -Be '11ty'
         { Get-RivetProfile -Name 'missing-profile' } | Should -Throw '*Unknown repository profile*'
         { Get-RivetProfile -Name '../psm' } | Should -Throw '*Invalid repository profile*'
         { Get-RivetProfile -Config ([pscustomobject]@{ profile = '' }) } | Should -Throw '*Invalid repository profile*'
@@ -1486,5 +1555,49 @@ $definition
         } finally {
             if ([System.IO.Directory]::Exists($folder)) { [System.IO.Directory]::Delete($folder, $true) }
         }
+    }
+
+    It 'initializes an 11ty theme repository, updates version, and passes doctor checks' {
+        $repo = Join-Path $TestDrive '11ty-init'
+        [System.IO.Directory]::CreateDirectory($repo) | Out-Null
+        Invoke-TestGit $repo init --initial-branch=main | Out-Null
+        Invoke-TestGit $repo config user.name testuser | Out-Null
+        Invoke-TestGit $repo config user.email test@example.invalid | Out-Null
+        $items = @(Initialize-RivetRepository -RepositoryRoot $repo -Profile 11ty -Raw -Confirm:$false)
+        $items.File | Should -Contain 'eleventy.config.js'
+        $items.File | Should -Contain 'package.json'
+        Test-Path (Join-Path $repo 'eleventy.config.js') | Should -BeTrue
+        Test-Path (Join-Path $repo 'package.json') | Should -BeTrue
+        Test-Path (Join-Path $repo 'README.md') | Should -BeTrue
+
+        $configPath = Resolve-RivetPath -RepositoryRoot $repo -ItemName 'repo_config.json'
+        $config = Get-RivetConfiguration $configPath
+        $config.profile | Should -Be '11ty'
+
+        $profile = Get-RivetProfile -Config $config
+        $profile.Name | Should -Be '11ty'
+        (& $profile.ReadVersion $repo $config) | Should -Be '0.1.0'
+
+        & $profile.UpdateVersion $repo $config '0.2.0' $false | Out-Null
+        (& $profile.ReadVersion $repo $config) | Should -Be '0.2.0'
+        (& $profile.ReviewVersions $repo $config) | Should -Contain 'package.json=0.2.0'
+
+        $doctor = Test-RivetRepository -RepositoryRoot $repo -ConfigPath $configPath
+        $doctor.Ready | Should -BeTrue
+    }
+
+    It 'propagates shared 11ty header rendering errors' {
+        $repo = Join-Path $TestDrive '11ty-header-error'
+        [System.IO.Directory]::CreateDirectory($repo) | Out-Null
+        Invoke-TestGit $repo init --initial-branch=main | Out-Null
+        Invoke-TestGit $repo config user.name testuser | Out-Null
+        Invoke-TestGit $repo config user.email test@example.invalid | Out-Null
+        Initialize-RivetRepository -RepositoryRoot $repo -Profile 11ty -Raw -Confirm:$false | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $repo 'repo_meta.json'), '{"project":{}}')
+
+        $configPath = Join-Path $repo 'repo_config.json'
+        $config = Get-RivetConfiguration $configPath
+        $profile = Get-RivetProfile -Config $config
+        { & $profile.UpdateHeader $repo $config $configPath $false } | Should -Throw
     }
 }

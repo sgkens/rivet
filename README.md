@@ -29,8 +29,8 @@ Rivet is an automation engine for JavaScript repository metadata, SemVer calcula
 
 ## Repository profiles
 
-Rivet supports JavaScript modules (`jsm`) and PowerShell modules (`psm`). Select the
-primary release artifact with a top-level `profile` property in `repo_config.json`;
+Rivet supports JavaScript modules (`jsm`), PowerShell modules (`psm`), and Eleventy themes (`11ty`).
+Select the primary release artifact with a top-level `profile` property in `repo_config.json`;
 existing configuration without that property continues to use `jsm`.
 Shared `project`, `commit`, `tagging`, `readme`, and GitLab settings keep their current structure.
 

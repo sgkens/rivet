@@ -1,0 +1,47 @@
+<!-- rivet:header:start -->
+# {{DISPLAY_NAME}}
+
+Eleventy (11ty) theme | Version 0.1.0
+<!-- rivet:header:end -->
+
+<!-- rivet:toc:start -->
+<!-- rivet:toc:end -->
+
+## Features
+
+- Component-based architecture for Eleventy and Nunjucks.
+- Built-in layouts for documentation, landing pages, and posts.
+- Accessible, dark-mode first responsive styling.
+
+## Installation
+
+```bash
+npm install {{PACKAGE_NAME}}
+```
+
+## Quick Start
+
+Add the theme to your `eleventy.config.js`:
+
+```javascript
+import theme from '{{PACKAGE_NAME}}';
+
+export default function(eleventyConfig) {
+  eleventyConfig.addPlugin(theme);
+}
+```
+
+## Configuration
+
+Configure theme options in your project's data directory or configuration file.
+
+## Development
+
+```bash
+npm install
+npm run dev
+```
+
+## License
+
+MIT

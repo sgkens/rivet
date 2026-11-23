@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "provider": "gitlab",
+  "scope": "project",
+  "project": {
+    "description": "{{DISPLAY_NAME}} is an Eleventy (11ty) theme.",
+    "topics": ["eleventy", "11ty", "theme", "nunjucks", "static-site-generator", "documentation", "templates"]
+  },
+  "labels": [
+    { "name": "theme", "description": "Theme layouts, components, templates, and styles.", "color": "#fd7e14", "textColor": "#1c1c1c" },
+    { "name": "content", "description": "Sample content, documentation pages, and collections.", "color": "#0d6efd", "textColor": "#FFFFFF" },
+    { "name": "config", "description": "Eleventy configuration, data files, and filters.", "color": "#20c997", "textColor": "#1c1c1c" },
+    { "name": "release", "description": "Versioning, packaging, and publication.", "color": "#6f42c1", "textColor": "#FFFFFF" },
+    { "name": "ci", "description": "Continuous integration and deployment.", "color": "#6610f2", "textColor": "#FFFFFF" },
+    { "name": "tests", "description": "Integration, visual regression, browser, and accessibility tests.", "color": "#198754", "textColor": "#FFFFFF" }
+  ]
+}

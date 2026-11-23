@@ -8,7 +8,7 @@
     "artifactPath": "{{PROJECT_PATH}}",
     "defaultBranch": "{{DEFAULT_BRANCH}}",
     "bannerUrl": "https://example.invalid/{{PROJECT_NAME}}-banner.svg",
-    "documentationUrl": "https://{{NAMESPACE}}.gitlab.io/{{PROJECT_NAME}}"
+    "documentationUrl": "{{PROJECT_URL}}"
   },
   "readmeHeader": {
     "alignment": "left",
@@ -18,6 +18,7 @@
     "logoColor": "#ffffff",
     "codecovToken": ""
   },
+  "scaffold": { "exclude": [], "templates": [] },
   "readme": {
     "requiredHeadings": [
       {
@@ -161,7 +162,7 @@
     "remote": "origin"
   },
   "gitlab": {
-    "baseUri": "https://gitlab.com",
+    "baseUri": "{{GITLAB_BASE_URI}}",
     "projectId": "",
     "tokenEnvironmentVariable": "GITLAB_API_KEY"
   },
