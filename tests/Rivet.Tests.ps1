@@ -12,6 +12,7 @@ BeforeAll {
         'ConvertFrom-ConventionalCommit.ps1',
         'Get-ConventionalCommitVersion.ps1',
         'Update-JSLibSemver.ps1',
+        'helpers/data_utils/Assert-RivetProjectDescription.ps1',
         'jsheader.ps1',
         'New-MarkdownTOC.ps1',
         'Invoke-RepositoryCommit.ps1',
@@ -430,6 +431,81 @@ Describe 'Invoke-RepositoryCommit' {
 }
 
 Describe 'Update-ReleaseDocumentation' {
+    It 'uses GitHub links for <Mode> with <HostName> metadata in .rivet' -ForEach @(
+        @{ Mode = 'draft'; HostName = 'github.com' }
+        @{ Mode = 'finalize'; HostName = 'github.com' }
+        @{ Mode = 'rebuild'; HostName = 'github.com' }
+        @{ Mode = 'draft'; HostName = 'github.example' }
+        @{ Mode = 'finalize'; HostName = 'github.example' }
+        @{ Mode = 'rebuild'; HostName = 'github.example' }
+    ) {
+        $repo = Join-Path $TestDrive "github-$Mode-$HostName"
+        New-TestRepository -Root $repo
+        $config = Join-Path $repo 'repo_config.json'
+        New-TestConfig -Path $config
+        if ($HostName -ne 'github.com') {
+            $document = [System.IO.File]::ReadAllText($config) | ConvertFrom-Json
+            $document | Add-Member github ([pscustomobject]@{ baseUri = "https://$HostName/" })
+            [System.IO.File]::WriteAllText($config, ($document | ConvertTo-Json -Depth 12))
+        }
+        [System.IO.Directory]::CreateDirectory((Join-Path $repo '.rivet')) | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $repo '.rivet/repo_meta.json'), '{"provider":"GitHub"}')
+        [System.IO.File]::AppendAllText((Join-Path $repo 'README.md'), "`nfeature")
+        Invoke-TestGit $repo add --all | Out-Null
+        Invoke-TestGit $repo commit -m 'feat(core): select provider links' | Out-Null
+        $hash = (Invoke-TestGit $repo rev-parse HEAD).Trim()
+        $options = @{ FromTag = 'v1.0.0'; Version = '1.1.0' }
+        if ($Mode -eq 'finalize') { $options.Finalize = $true }
+        if ($Mode -eq 'rebuild') { $options.Rebuild = $true }
+        Update-ReleaseDocumentation -RepositoryRoot $repo -ConfigPath $config @options -WriteChangelogJson -Confirm:$false | Out-Null
+        $expectedUrl = "https://$HostName/group/fixture/commit/$hash"
+        foreach ($file in @('CHANGELOG.md', 'release-notes.md', 'docs/data/changelog.json')) {
+            $content = [System.IO.File]::ReadAllText((Join-Path $repo $file))
+            $content | Should -Match ([regex]::Escape($expectedUrl))
+            $content | Should -Not -Match 'gitlab|/-/commit/'
+            $content | Should -Match '@fixture-user'
+        }
+    }
+
+    It 'queries <Provider> published releases with provider-specific authentication' -ForEach @(
+        @{ Provider = 'github'; BaseUri = 'https://api.github.com/repos/group/fixture'; TokenHeader = 'Authorization'; TokenValue = 'Bearer fixture-token'; Enterprise = $false }
+        @{ Provider = 'gitlab'; BaseUri = 'https://gitlab.example/api/v4/projects/group%2Ffixture'; TokenHeader = 'PRIVATE-TOKEN'; TokenValue = 'fixture-token'; Enterprise = $false }
+        @{ Provider = 'github'; BaseUri = 'https://github.example/api/v3/repos/group/fixture'; TokenHeader = 'Authorization'; TokenValue = 'Bearer fixture-token'; Enterprise = $true }
+    ) {
+        $repo = Join-Path $TestDrive "api-$Provider-$([guid]::NewGuid())"
+        New-TestRepository -Root $repo
+        $config = Join-Path $repo 'repo_config.json'
+        New-TestConfig -Path $config
+        $document = [System.IO.File]::ReadAllText($config) | ConvertFrom-Json
+        $document | Add-Member metadataSource 'custom-meta.json'
+        $githubConfig = [pscustomobject]@{ tokenEnvironmentVariable = 'RIVET_TEST_TOKEN' }
+        if ($Enterprise) { $githubConfig | Add-Member baseUri 'https://github.example' }
+        $document | Add-Member github $githubConfig
+        [System.IO.File]::WriteAllText($config, ($document | ConvertTo-Json -Depth 12))
+        [System.IO.File]::WriteAllText((Join-Path $repo 'custom-meta.json'), ('{"provider":"' + $Provider + '"}'))
+        [System.IO.File]::AppendAllText((Join-Path $repo 'README.md'), "`nfeature")
+        Invoke-TestGit $repo add --all | Out-Null
+        Invoke-TestGit $repo commit -m 'feat(core): select published baseline' | Out-Null
+        Invoke-TestGit $repo tag v1.1.0 | Out-Null
+        Mock Invoke-RestMethod {
+            @(
+                [pscustomobject]@{ tag_name = 'v1.1.0'; draft = $true; published_at = '2026-03-02'; released_at = '2026-03-02' }
+                [pscustomobject]@{ tag_name = 'v1.0.0'; draft = $false; published_at = '2026-03-01'; released_at = '2026-03-01' }
+            )
+        }
+        $oldToken = [Environment]::GetEnvironmentVariable('RIVET_TEST_TOKEN')
+        try {
+            [Environment]::SetEnvironmentVariable('RIVET_TEST_TOKEN', 'fixture-token')
+            Update-ReleaseDocumentation -RepositoryRoot $repo -ConfigPath $config -Version 1.2.0 -Confirm:$false | Out-Null
+            Should -Invoke Invoke-RestMethod -Times 1 -Exactly -ParameterFilter {
+                $Uri -eq "$BaseUri/releases?per_page=100&page=1" -and $Headers[$TokenHeader] -eq $TokenValue
+            }
+            if ($Provider -eq 'github') {
+                [System.IO.File]::ReadAllText((Join-Path $repo 'CHANGELOG.md')) | Should -Match 'Select published baseline'
+            }
+        } finally { [Environment]::SetEnvironmentVariable('RIVET_TEST_TOKEN', $oldToken) }
+    }
+
     It 'generates GitLab commit links and mapped author mentions' {
         $repo = Join-Path $TestDrive 'release-repo'
         New-TestRepository -Root $repo

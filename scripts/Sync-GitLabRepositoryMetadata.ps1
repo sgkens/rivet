@@ -44,6 +44,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. ([System.IO.Path]::Combine($PSScriptRoot, 'helpers', 'data_utils', 'Assert-RivetProjectDescription.ps1'))
+
 function Read-JsonFile {
     param([Parameter(Mandatory)][ValidateScript({ [System.IO.File]::Exists($_) })][string]$Path)
 
@@ -192,6 +194,7 @@ $labelScope = Get-JsonString -Object $config -Name 'labelScope' -Default 'projec
 if ($labelScope -ne 'project') { throw "Only project-scoped labels are supported; configured scope was '$labelScope'." }
 $metadataScope = Get-JsonString -Object $metadata -Name 'scope' -Default 'project'
 if ($metadataScope -ne 'project') { throw "Repository metadata must declare scope 'project'; configured scope was '$metadataScope'." }
+$projectDescription = Assert-RivetProjectDescription -Description (Get-JsonString -Object $projectMetadata -Name 'description')
 $baseUri = (Get-JsonString -Object $gitlab -Name 'baseUri' -Default 'https://gitlab.com').TrimEnd('/')
 $projectId = Get-JsonString -Object $gitlab -Name 'projectId'
 $projectPath = Get-JsonString -Object $projectConfig -Name 'path'
@@ -220,8 +223,7 @@ if (-not $topicsChanged) {
 }
 $projectUpdate = @{}
 if ($topicsChanged) { $projectUpdate.topics = $desiredTopics.ToArray() }
-$projectDescription = Get-JsonString -Object $projectMetadata -Name 'description'
-if (-not [string]::IsNullOrWhiteSpace($projectDescription) -and [string]$project.description -ne $projectDescription) {
+if ([string]$project.description -ne $projectDescription) {
     $projectUpdate.description = $projectDescription
 }
 if ($projectUpdate.Count -gt 0) {

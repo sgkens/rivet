@@ -343,11 +343,11 @@ Automated non-interactive commit execution:
 
 ### Conceptual
 
-Release documentation generation parses commits after the latest reachable GitLab release tag.
+Release documentation generation parses commits after the latest reachable release tag for the `provider` selected in `repo_meta.json` (`gitlab` or `github`; defaults to `gitlab` when omitted). GitHub uses `https://github.com` and `GITHUB_TOKEN` by default. Optional `github.baseUri`, `github.apiUrl`, and `github.tokenEnvironmentVariable` settings in `repo_config.json` override the GitHub host, API endpoint, and token variable.
 
 - Conventional Commit types map to standard headings: `Added` (`feat`), `Fixed` (`fix`), `Changed` (`refactor`, `style`, `build`, `ci`, `chore`, non-conventional subjects), `Deprecated`, `Removed`, and `Security`.
 - Scope filtering via `-CommitScope <name>` isolates entries matching a specific subsystem.
-- Each entry includes a 7-character Git hash linking to GitLab and an `@username` author reference when mapped in `authors.mappings`.
+- Each entry includes a 7-character Git hash linking to the selected provider and an `@username` author reference when mapped in `authors.mappings`.
 - Replaces content exclusively between `<!-- rivet:changelog -->` and `<!-- rivet:release-notes -->` markers.
 - `rebuild-changelog` iterates chronologically across all Git tags, regenerating `CHANGELOG.md` and `docs/data/changelog.json` across the complete repository history.
 
@@ -922,6 +922,6 @@ flowchart TD
 | `repo_config.json` | `metadataSource`                  | `string`   | Relative path from `repo_config.json` to project metadata catalog (default: `repo_meta.json`).                         |
 | `repo_config.json` | `labelScope`                      | `string`   | Scope for managed GitLab labels (`project`).                                                                           |
 | `repo_config.json` | `requestTimeoutSeconds`           | `integer`  | Timeout in seconds for GitLab REST API HTTP requests.                                                                  |
-| `repo_meta.json`   | `project.description`             | `string`   | Authoritative project description used for README headers and GitLab repository profile.                               |
+| `repo_meta.json`   | `project.description`             | `string`   | Non-empty, single-line project description (maximum 160 characters) used for README headers and the GitLab profile.    |
 | `repo_meta.json`   | `project.topics`                  | `string[]` | Array of GitLab project repository topic strings.                                                                      |
 | `repo_meta.json`   | `labels`                          | `object[]` | Catalog of managed GitLab label objects (`name`, `description`, `color`, `text_color`).                                |
