@@ -28,6 +28,7 @@ $runtimeFiles = @(
     [System.IO.Path]::Combine($scriptsRoot, 'ConvertFrom-ConventionalCommit.ps1')
     [System.IO.Path]::Combine($scriptsRoot, 'Get-ConventionalCommitVersion.ps1')
     [System.IO.Path]::Combine($scriptsRoot, 'Update-JSLibSemver.ps1')
+    [System.IO.Path]::Combine($helperRoot, 'data_utils', 'Assert-RivetProjectDescription.ps1')
     [System.IO.Path]::Combine($scriptsRoot, 'jsheader.ps1')
     [System.IO.Path]::Combine($scriptsRoot, 'New-MarkdownTOC.ps1')
     [System.IO.Path]::Combine($scriptsRoot, 'Update-ReleaseDocumentation.ps1')

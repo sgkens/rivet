@@ -3,14 +3,14 @@ function Update-ReleaseDocumentation {
     .SYNOPSIS
         Generates marker-bounded changelog and release-note content from Git history.
     .DESCRIPTION
-        Reads commits after the newest reachable tag that has a GitLab release,
+        Reads commits after the newest reachable tag that has a provider release,
         or an explicitly supplied Git ref, and groups them by Keep a Changelog
         categories. Only content between rivet markers is replaced.
         Supports full changelog reconstruction across all reachable tags with -Rebuild.
     .PARAMETER RepositoryRoot
         Repository containing CHANGELOG.md and release-notes.md.
     .PARAMETER FromTag
-        Optional reachable Git tag or ref used instead of the latest GitLab
+        Optional reachable Git tag or ref used instead of the latest provider
         release tag as the beginning of the range.
     .PARAMETER Version
         Release version. Defaults to the selected profile manifest.
@@ -67,6 +67,35 @@ function Update-ReleaseDocumentation {
     $tokenVariable = [string]$config.gitlab.tokenEnvironmentVariable
     $timeoutSeconds = [int]$config.requestTimeoutSeconds
 
+    # Provider selection lives in repository metadata; old configurations default to GitLab.
+    $provider = 'gitlab'
+    $metadataSource = if ($config.PSObject.Properties['metadataSource']) { [string]$config.metadataSource } else { 'repo_meta.json' }
+    $metadataPath = if ([System.IO.Path]::IsPathRooted($metadataSource)) {
+        $metadataSource
+    } else {
+        $resolvedMeta = Resolve-RivetPath -RepositoryRoot $repositoryPath -ItemName $metadataSource
+        if ([System.IO.File]::Exists($resolvedMeta)) { $resolvedMeta }
+        else { [System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName([System.IO.Path]::GetFullPath($ConfigPath)), $metadataSource) }
+    }
+    if ([System.IO.File]::Exists($metadataPath)) {
+        $metadata = [System.IO.File]::ReadAllText($metadataPath) | ConvertFrom-Json -Depth 32
+        if ($metadata.PSObject.Properties['provider'] -and -not [string]::IsNullOrWhiteSpace([string]$metadata.provider)) {
+            $provider = ([string]$metadata.provider).Trim().ToLowerInvariant()
+        }
+    }
+    if ($provider -notin @('gitlab', 'github')) { throw "Unsupported release documentation provider '$provider'. Supported providers: gitlab, github." }
+    $providerName = if ($provider -eq 'github') { 'GitHub' } else { 'GitLab' }
+    $commitPath = '-/commit'
+    if ($provider -eq 'github') {
+        $github = if ($config.PSObject.Properties['github']) { $config.github } else { $null }
+        $baseUri = if ($null -ne $github -and $github.PSObject.Properties['baseUri'] -and $github.baseUri) { ([string]$github.baseUri).TrimEnd('/') } else { 'https://github.com' }
+        $apiUri = if ($null -ne $github -and $github.PSObject.Properties['apiUrl'] -and $github.apiUrl) { ([string]$github.apiUrl).TrimEnd('/') }
+            elseif ($baseUri -eq 'https://github.com') { 'https://api.github.com' } else { "$baseUri/api/v3" }
+        $tokenVariable = if ($null -ne $github -and $github.PSObject.Properties['tokenEnvironmentVariable'] -and $github.tokenEnvironmentVariable) { [string]$github.tokenEnvironmentVariable } else { 'GITHUB_TOKEN' }
+        $commitPath = 'commit'
+    }
+    $commitBaseUri = "$baseUri/$projectPath/$commitPath"
+
     $categoryOrder = @('Added', 'Changed', 'Deprecated', 'Removed', 'Fixed', 'Security')
     $format = '%H%x1f%an%x1f%ae%x1f%s%x1f%b%x1e'
 
@@ -109,7 +138,7 @@ function Update-ReleaseDocumentation {
                 $authorReference = Resolve-GitLabAuthorReference -Config $config -Name $author -Email $authorEmail
                 $metadata = [System.Collections.Generic.List[string]]::new(2)
                 if ($IncludeCommitHash) {
-                    $metadata.Add("[$shortHash]($baseUri/$projectPath/-/commit/$commitHash)")
+                    $metadata.Add("[$shortHash]($commitBaseUri/$commitHash)")
                 }
                 if ($IncludeAuthor) {
                     $metadata.Add($authorReference)
@@ -128,7 +157,7 @@ function Update-ReleaseDocumentation {
                         commit = [ordered]@{
                             short = $shortHash
                             hash = $commitHash
-                            url = "$baseUri/$projectPath/-/commit/$commitHash"
+                            url = "$commitBaseUri/$commitHash"
                         }
                         author = [ordered]@{
                             name = $author
@@ -319,28 +348,35 @@ $notesEnd
         $projectKey = if ([string]::IsNullOrWhiteSpace($projectId)) { [Uri]::EscapeDataString($projectPath) } else { $projectId }
         $headers = @{ Accept = 'application/json' }
         $accessToken = [System.Environment]::GetEnvironmentVariable($tokenVariable)
-        if (-not [string]::IsNullOrWhiteSpace($accessToken)) { $headers['PRIVATE-TOKEN'] = $accessToken }
+        if ($provider -eq 'github') {
+            $headers.Accept = 'application/vnd.github+json'
+            if (-not [string]::IsNullOrWhiteSpace($accessToken)) { $headers.Authorization = "Bearer $accessToken" }
+        } elseif (-not [string]::IsNullOrWhiteSpace($accessToken)) { $headers['PRIVATE-TOKEN'] = $accessToken }
 
         $releases = [System.Collections.Generic.List[object]]::new()
         $page = 1
         do {
             try {
-                $pageResponse = Invoke-RestMethod -Method Get -Uri "$baseUri/api/v4/projects/$projectKey/releases?per_page=100&page=$page" -Headers $headers -TimeoutSec $timeoutSeconds
+                $releasesUri = if ($provider -eq 'github') { "$apiUri/repos/$projectPath/releases?per_page=100&page=$page" }
+                    else { "$baseUri/api/v4/projects/$projectKey/releases?per_page=100&page=$page" }
+                $pageResponse = Invoke-RestMethod -Method Get -Uri $releasesUri -Headers $headers -TimeoutSec $timeoutSeconds
                 $pageItems = @($pageResponse)
             } catch {
-                throw "Unable to query GitLab releases; specify -FromTag to use an explicit baseline. $($_.Exception.Message)"
+                throw "Unable to query $providerName releases; specify -FromTag to use an explicit baseline. $($_.Exception.Message)"
             }
             foreach ($release in $pageItems) { if ($null -ne $release) { [void]$releases.Add($release) } }
             $page++
         } while ($pageItems.Count -eq 100)
 
-        foreach ($release in @($releases | Sort-Object -Property released_at -Descending)) {
+        $releaseDateProperty = if ($provider -eq 'github') { 'published_at' } else { 'released_at' }
+        foreach ($release in @($releases | Sort-Object -Property $releaseDateProperty -Descending)) {
+            if ($provider -eq 'github' -and $release.draft) { continue }
             $candidate = [string]$release.tag_name
             if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
             & git -C $repositoryPath merge-base --is-ancestor $candidate HEAD 2>$null
             if ($LASTEXITCODE -eq 0) { $FromTag = $candidate; break }
         }
-        if ([string]::IsNullOrWhiteSpace($FromTag)) { throw 'No GitLab release tag is reachable from HEAD; specify -FromTag.' }
+        if ([string]::IsNullOrWhiteSpace($FromTag)) { throw "No $providerName release tag is reachable from HEAD; specify -FromTag." }
     } else {
         & git -C $repositoryPath merge-base --is-ancestor $FromTag HEAD
         if ($LASTEXITCODE -ne 0) { throw "FromTag '$FromTag' is not a reachable ancestor of HEAD." }

@@ -19,6 +19,6 @@
 
 [![runtime-badge]({{GITLAB_BASE_URI}}/api/v4/projects/{{ENCODED_ARTIFACT_PATH}}/jobs/artifacts/{{LATEST_TAG}}/raw/runtime-badge-flat.svg?job=generate-runtime-badge)]({{GITLAB_BASE_URI}}/api/v4/projects/{{ENCODED_ARTIFACT_PATH}}/jobs/artifacts/{{DEFAULT_BRANCH}}/raw/runtime-badge-flat.svg?job=generate-runtime-badge)
 
-> **{{DISPLAY_NAME}}**{{DESCRIPTION_SUFFIX}}
+> {{DESCRIPTION}}
 
 </div>
